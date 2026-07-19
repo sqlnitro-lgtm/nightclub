@@ -1,0 +1,14 @@
+{
+  "name": "discord-bot-starter",
+  "version": "1.0.0",
+  "description": "Squelette de base pour un bot Discord (discord.js v14)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5"
+  }
+}
