@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { setFollow, clearFollow, getFollowTarget } = require('../data/voiceFollowStore');
 const { requireAdmin } = require('../data/permissionHelper');
 
@@ -6,8 +6,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('followuser')
     .setDescription('Te déplace automatiquement dans le même salon vocal qu\'un membre (bascule, relance pour arrêter)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à suivre').setRequired(true)),
+    .setContexts([InteractionContextType.Guild])
+    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à suivre')
+    .setRequired(true)),
 
   async execute(interaction) {
     if (!(await requireAdmin(interaction))) return;

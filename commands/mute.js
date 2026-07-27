@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { ensureMutedRole } = require('../data/mutedRoleHelper');
 const { setMute, isMuted } = require('../data/muteStore');
 const { canModerate } = require('../data/hierarchyHelper');
@@ -10,7 +10,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('mute')
     .setDescription('Mute un membre (rôle Muted, distinct du timeout natif)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à mute').setRequired(true))
     .addStringOption((opt) =>
       opt

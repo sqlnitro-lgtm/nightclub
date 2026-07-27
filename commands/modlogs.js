@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { getHistory } = require('../data/modLogStore');
 const { getWarns } = require('../data/warnStore');
 const { requireAdmin } = require('../data/permissionHelper');
@@ -24,7 +24,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('modlogs')
     .setDescription("Affiche l'historique de modération d'un membre")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true)),
 
   async execute(interaction) {

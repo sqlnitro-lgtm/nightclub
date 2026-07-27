@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { findMutedRole } = require('../data/mutedRoleHelper');
 const { clearMute, isMuted } = require('../data/muteStore');
 const { logModAction } = require('../data/modLogHelper');
@@ -8,8 +8,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('unmute')
     .setDescription('Retire le mute (rôle Muted) d\'un membre')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
+    .setContexts([InteractionContextType.Guild])
+    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné')
+    .setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
 
   async execute(interaction) {

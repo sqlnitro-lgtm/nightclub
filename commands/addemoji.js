@@ -1,11 +1,11 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('addemoji')
     .setDescription('Ajoute un emoji au serveur')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addStringOption((opt) => opt.setName('nom').setDescription("Nom de l'emoji").setRequired(true).setMaxLength(32))
     .addAttachmentOption((opt) => opt.setName('image').setDescription("Image de l'emoji").setRequired(true)),
 

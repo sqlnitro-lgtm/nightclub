@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
 
 const ADMIN_ROLE_NAME = 'Admin';
@@ -7,7 +7,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('removeadmin')
     .setDescription('Retire le rôle Admin à un membre')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true)),
 
   async execute(interaction) {

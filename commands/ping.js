@@ -6,10 +6,11 @@
  * ------------------------------------------------------------------
  */
 
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, InteractionContextType} = require('discord.js');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('ping').setDescription('Répond pong !'),
+  data: new SlashCommandBuilder().setName('ping').setDescription('Répond pong !')
+    .setContexts([InteractionContextType.Guild]),
 
   async execute(interaction) {
     await interaction.reply('🏓 Pong !');

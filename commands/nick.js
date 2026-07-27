@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { canModerate } = require('../data/hierarchyHelper');
 const { requireAdmin } = require('../data/permissionHelper');
 
@@ -6,7 +6,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('nick')
     .setDescription("Change le pseudo d'un membre")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
     .addStringOption((opt) => opt.setName('pseudo').setDescription('Nouveau pseudo').setRequired(true).setMaxLength(32)),
 

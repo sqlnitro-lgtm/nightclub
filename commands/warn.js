@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { addWarn } = require('../data/warnStore');
 const { canModerate } = require('../data/hierarchyHelper');
 const { logModAction } = require('../data/modLogHelper');
@@ -8,7 +8,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('warn')
     .setDescription('Avertit un membre')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription("Raison de l'avertissement").setRequired(true)),
 

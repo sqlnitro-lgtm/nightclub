@@ -1,11 +1,11 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('purge')
     .setDescription("Supprime les messages d'un membre parmi les derniers messages du salon")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre dont les messages seront supprimés').setRequired(true))
     .addIntegerOption((opt) =>
       opt.setName('parmi').setDescription('Nombre de messages récents à examiner (défaut 100, max 200)').setRequired(false).setMinValue(1).setMaxValue(200)

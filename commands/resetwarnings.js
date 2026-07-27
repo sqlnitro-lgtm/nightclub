@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { resetWarns, getWarns } = require('../data/warnStore');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
@@ -7,7 +7,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('resetwarnings')
     .setDescription("Efface tous les avertissements d'un membre")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true)),
 
   async execute(interaction) {

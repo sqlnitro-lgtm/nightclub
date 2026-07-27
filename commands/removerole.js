@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { canModerate } = require('../data/hierarchyHelper');
 const { requireAdmin } = require('../data/permissionHelper');
 
@@ -6,7 +6,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('removerole')
     .setDescription("Retire un rôle à un membre")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
     .addRoleOption((opt) => opt.setName('role').setDescription('Le rôle à retirer').setRequired(true)),
 

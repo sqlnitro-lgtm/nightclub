@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType, InteractionContextType} = require('discord.js');
 const { getEdited } = require('../data/snipeStore');
 const { requireAdmin } = require('../data/permissionHelper');
 
@@ -6,7 +6,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('editsnipe')
     .setDescription('Affiche le dernier message édité de ce salon (avant/après)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addChannelOption((opt) =>
       opt.setName('salon').setDescription('Le salon concerné (défaut : celui-ci)').addChannelTypes(ChannelType.GuildText).setRequired(false)
     ),

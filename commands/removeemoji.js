@@ -1,11 +1,11 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('removeemoji')
     .setDescription('Retire un emoji du serveur')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addStringOption((opt) => opt.setName('nom').setDescription("Nom exact de l'emoji à retirer").setRequired(true)),
 
   async execute(interaction) {

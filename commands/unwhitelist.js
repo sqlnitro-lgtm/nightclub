@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { removeFromWhitelist, isWhitelisted } = require('../data/accessListStore');
 const { requireAdmin } = require('../data/permissionHelper');
 
@@ -6,7 +6,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('unwhitelist')
     .setDescription('Retire un membre de la liste blanche')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true)),
 
   async execute(interaction) {

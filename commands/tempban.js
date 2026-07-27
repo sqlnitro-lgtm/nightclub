@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { canModerate } = require('../data/hierarchyHelper');
 const { addTempBan } = require('../data/tempBanStore');
 const { DURATION_CHOICES, DURATION_MS, DURATION_LABEL } = require('../data/durationChoices');
@@ -9,7 +9,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('tempban')
     .setDescription('Bannit un membre pour une durée définie (débannissement automatique)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à bannir').setRequired(true))
     .addStringOption((opt) =>
       opt.setName('duree').setDescription('Durée du bannissement').setRequired(true).addChoices(...DURATION_CHOICES)

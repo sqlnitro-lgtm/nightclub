@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { removeWarn, getWarns } = require('../data/warnStore');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
@@ -7,8 +7,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('unwarn')
     .setDescription('Retire le dernier avertissement (ou un numéro précis) d\'un membre')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
+    .setContexts([InteractionContextType.Guild])
+    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné')
+    .setRequired(true))
     .addIntegerOption((opt) =>
       opt.setName('numero').setDescription('Numéro de l\'avertissement à retirer (voir /modlogs) — sinon le dernier').setRequired(false).setMinValue(1)
     ),

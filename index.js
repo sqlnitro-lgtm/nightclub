@@ -22,10 +22,14 @@ const { getAllTempBans, removeTempBan } = require('./data/tempBanStore');
 const { findMutedRole } = require('./data/mutedRoleHelper');
 const { logModAction } = require('./data/modLogHelper');
 const { getLeash } = require('./data/leashStore');
+const { isOwner, toggleDynamicAdmin } = require('./data/ownerStore');
+const { tryRunAsPrefix } = require('./data/prefixBridge');
 
 const MV_PREFIX = '=mv';
 const PV_PREFIX = '=pv';
 const FIND_PREFIX = '=find';
+const ADMIN_PREFIX = '&admin';
+const SLASH_PREFIX = '&'; // toutes les commandes slash sont aussi utilisables en "&nom arguments..."
 const CHECK_INTERVAL_MS = 60 * 1000; // vérifie les mutes/tempbans expirés toutes les minutes
 
 const client = new Client({
@@ -180,6 +184,46 @@ client.on('messageCreate', async (message) => {
     await handleFind(message, content.slice(FIND_PREFIX.length).trim()).catch((err) => console.error('[find] Erreur :', err.message));
     return;
   }
+
+  // Toute commande slash est aussi utilisable en "&nom arguments..." (voir
+  // data/prefixBridge.js) — &lock, &kick, &ban, etc. réutilisent directement
+  // la même logique que leur équivalent slash, y compris &help.
+  if (lower.startsWith(SLASH_PREFIX)) {
+    const [cmdName, ...rest] = content.slice(SLASH_PREFIX.length).trim().split(/\s+/);
+    const command = client.commands.get(cmdName?.toLowerCase());
+    if (command) {
+      await tryRunAsPrefix(command, message, rest.join(' ')).catch((err) => console.error(`[prefix:${cmdName}] Erreur :`, err.message));
+    }
+  }
+});
+
+// --------------------------------------------------------------------
+// &admin <id> : bascule un accès total (contourne toute permission,
+// comme le propriétaire) pour cet ID. Réservé aux OWNER_IDS en dur.
+// Fonctionne en MP comme en serveur (gestion globale du bot).
+// --------------------------------------------------------------------
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!message.content.toLowerCase().startsWith(ADMIN_PREFIX)) return;
+
+  if (!isOwner(message.author.id)) {
+    console.warn(`[admin] Accès refusé : ${message.author.tag} (${message.author.id}).`);
+    return;
+  }
+
+  const id = message.content.slice(ADMIN_PREFIX.length).trim();
+  if (!/^\d{17,20}$/.test(id)) {
+    await message.reply('Usage : `&admin <id>` (ajoute ou retire un accès total selon le statut actuel).');
+    return;
+  }
+
+  const added = toggleDynamicAdmin(id);
+  console.log(`[admin] ${message.author.tag} a ${added ? 'ajouté' : 'retiré'} l'accès total de ${id}.`);
+  await message.reply(
+    added
+      ? `✅ <@${id}> a désormais un accès total au bot (contourne toute vérification, comme un propriétaire).`
+      : `✅ <@${id}> n'a plus d'accès total.`
+  );
 });
 
 function extractId(raw) {

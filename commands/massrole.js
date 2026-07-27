@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { isBlr } = require('../data/blrStore');
 const { requireAdmin } = require('../data/permissionHelper');
 
@@ -6,7 +6,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('massrole')
     .setDescription('Ajoute un rôle à tous les membres du serveur (respecte le statut BLR)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addRoleOption((opt) => opt.setName('role').setDescription('Le rôle à attribuer à tous').setRequired(true)),
 
   async execute(interaction) {

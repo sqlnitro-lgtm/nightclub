@@ -1,11 +1,11 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('unlock')
     .setDescription('Déverrouille un salon')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addChannelOption((opt) =>
       opt.setName('salon').setDescription('Le salon à déverrouiller (défaut : celui-ci)').addChannelTypes(ChannelType.GuildText).setRequired(false)
     ),

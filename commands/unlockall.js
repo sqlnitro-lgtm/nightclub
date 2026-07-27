@@ -1,11 +1,11 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('unlockall')
     .setDescription('Déverrouille tous les salons texte du serveur')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setContexts([InteractionContextType.Guild]),
 
   async execute(interaction) {
     if (!(await requireAdmin(interaction))) return;

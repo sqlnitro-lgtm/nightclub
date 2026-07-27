@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { removeFromBlacklist, isBlacklisted } = require('../data/blacklistStore');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
@@ -7,7 +7,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('unblacklist')
     .setDescription("Retire un membre de la liste noire (ne le débannit pas automatiquement)")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addStringOption((opt) => opt.setName('id').setDescription('ID Discord du membre').setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
 

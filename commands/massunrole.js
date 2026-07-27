@@ -1,12 +1,13 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('massunrole')
     .setDescription('Retire un rôle à tous les membres qui l\'ont')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addRoleOption((opt) => opt.setName('role').setDescription('Le rôle à retirer à tous').setRequired(true)),
+    .setContexts([InteractionContextType.Guild])
+    .addRoleOption((opt) => opt.setName('role').setDescription('Le rôle à retirer à tous')
+    .setRequired(true)),
 
   async execute(interaction) {
     if (!(await requireAdmin(interaction))) return;

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
 
@@ -6,7 +6,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('unban')
     .setDescription("Débannit un membre (par ID)")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addStringOption((opt) => opt.setName('id').setDescription("ID Discord du membre à débannir").setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
 

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { canModerate } = require('../data/hierarchyHelper');
 const { DURATION_CHOICES, DURATION_MS, DURATION_LABEL } = require('../data/durationChoices');
 const { logModAction } = require('../data/modLogHelper');
@@ -8,7 +8,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('timeout')
     .setDescription('Timeout natif Discord (coupe la communication) pour un membre')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
     .addStringOption((opt) =>
       opt.setName('duree').setDescription('Durée du timeout').setRequired(true).addChoices(...DURATION_CHOICES)

@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { canModerate } = require('../data/hierarchyHelper');
 const { requireAdmin } = require('../data/permissionHelper');
 
@@ -6,8 +6,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('voicemute')
     .setDescription('Coupe le micro d\'un membre en vocal')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true)),
+    .setContexts([InteractionContextType.Guild])
+    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné')
+    .setRequired(true)),
 
   async execute(interaction) {
     if (!(await requireAdmin(interaction))) return;

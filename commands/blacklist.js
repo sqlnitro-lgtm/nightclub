@@ -3,7 +3,7 @@
  * s'il revient (ID invité malgré le ban, ou après un débannissement fait
  * ailleurs), guildMemberAdd (index.js) le re-bannit automatiquement.
  */
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { addToBlacklist, isBlacklisted } = require('../data/blacklistStore');
 const { isWhitelisted } = require('../data/accessListStore');
 const { canModerate } = require('../data/hierarchyHelper');
@@ -14,8 +14,9 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('blacklist')
     .setDescription('Bannit un membre et le blackliste (re-banni automatiquement s\'il tente de revenir)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
+    .setContexts([InteractionContextType.Guild])
+    .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné')
+    .setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
 
   async execute(interaction) {

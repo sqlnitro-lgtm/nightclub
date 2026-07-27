@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { canModerate } = require('../data/hierarchyHelper');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
@@ -7,9 +7,8 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('ban')
     .setDescription('Bannit un membre du serveur')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à bannir').setRequired(true))
-    .addStringOption((opt) => opt.setName('raison').setDescription('Raison du bannissement').setRequired(false))
     .addIntegerOption((opt) =>
       opt
         .setName('supprimer_messages')
@@ -17,7 +16,8 @@ module.exports = {
         .setRequired(false)
         .setMinValue(0)
         .setMaxValue(7)
-    ),
+    )
+    .addStringOption((opt) => opt.setName('raison').setDescription('Raison du bannissement').setRequired(false)),
 
   async execute(interaction) {
     if (!(await requireAdmin(interaction))) return;
