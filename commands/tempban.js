@@ -3,12 +3,13 @@ const { canModerate } = require('../data/hierarchyHelper');
 const { addTempBan } = require('../data/tempBanStore');
 const { DURATION_CHOICES, DURATION_MS, DURATION_LABEL } = require('../data/durationChoices');
 const { logModAction } = require('../data/modLogHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('tempban')
     .setDescription('Bannit un membre pour une durée définie (débannissement automatique)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à bannir').setRequired(true))
     .addStringOption((opt) =>
       opt.setName('duree').setDescription('Durée du bannissement').setRequired(true).addChoices(...DURATION_CHOICES)
@@ -16,6 +17,8 @@ module.exports = {
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const targetUser = interaction.options.getUser('membre');
     const target = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
     const durationKey = interaction.options.getString('duree');

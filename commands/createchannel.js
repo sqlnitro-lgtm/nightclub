@@ -1,10 +1,11 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('createchannel')
     .setDescription('Crée un salon')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption((opt) => opt.setName('nom').setDescription('Nom du salon').setRequired(true))
     .addStringOption((opt) =>
       opt
@@ -18,6 +19,8 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const name = interaction.options.getString('nom');
     const typeChoice = interaction.options.getString('type') ?? 'text';
     const category = interaction.options.getChannel('categorie');

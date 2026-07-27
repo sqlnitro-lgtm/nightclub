@@ -1,12 +1,13 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { canModerate } = require('../data/hierarchyHelper');
 const { logModAction } = require('../data/modLogHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ban')
     .setDescription('Bannit un membre du serveur')
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à bannir').setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison du bannissement').setRequired(false))
     .addIntegerOption((opt) =>
@@ -19,6 +20,8 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const targetUser = interaction.options.getUser('membre');
     const target = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
     const reason = interaction.options.getString('raison');

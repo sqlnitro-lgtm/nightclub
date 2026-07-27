@@ -1,15 +1,18 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('lock')
     .setDescription("Verrouille un salon (empêche @everyone d'écrire)")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption((opt) =>
       opt.setName('salon').setDescription('Le salon à verrouiller (défaut : celui-ci)').addChannelTypes(ChannelType.GuildText).setRequired(false)
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const channel = interaction.options.getChannel('salon') ?? interaction.channel;
 
     try {

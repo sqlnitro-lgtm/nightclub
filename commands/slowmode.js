@@ -1,10 +1,11 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('slowmode')
     .setDescription('Active le mode lent sur un salon')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addIntegerOption((opt) =>
       opt.setName('secondes').setDescription('Délai entre les messages (0-21600)').setRequired(true).setMinValue(1).setMaxValue(21600)
     )
@@ -13,6 +14,8 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const channel = interaction.options.getChannel('salon') ?? interaction.channel;
     const seconds = interaction.options.getInteger('secondes');
 

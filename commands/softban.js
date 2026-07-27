@@ -1,12 +1,13 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { canModerate } = require('../data/hierarchyHelper');
 const { logModAction } = require('../data/modLogHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('softban')
     .setDescription('Bannit puis débannit immédiatement un membre (purge ses messages sans le bannir durablement)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false))
     .addIntegerOption((opt) =>
@@ -19,6 +20,8 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const target = await interaction.guild.members.fetch(interaction.options.getUser('membre').id).catch(() => null);
     const reason = interaction.options.getString('raison');
     const deleteDays = interaction.options.getInteger('supprimer_messages') ?? 1;

@@ -1,13 +1,16 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('voiceunmute')
     .setDescription("Réactive le micro d'un membre en vocal")
-    .setDefaultMemberPermissions(PermissionFlagsBits.MuteMembers)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const target = await interaction.guild.members.fetch(interaction.options.getUser('membre').id).catch(() => null);
 
     if (!target) {

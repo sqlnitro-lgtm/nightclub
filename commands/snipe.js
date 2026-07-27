@@ -1,16 +1,19 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
 const { getDeleted } = require('../data/snipeStore');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('snipe')
     .setDescription('Affiche le dernier message supprimé de ce salon')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption((opt) =>
       opt.setName('salon').setDescription('Le salon concerné (défaut : celui-ci)').addChannelTypes(ChannelType.GuildText).setRequired(false)
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const channel = interaction.options.getChannel('salon') ?? interaction.channel;
     const entry = getDeleted(channel.id);
 

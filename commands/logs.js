@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
 const { setLogChannel, getLogChannelId } = require('../data/modLogStore');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,6 +12,8 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const channel = interaction.options.getChannel('salon');
 
     if (!channel) {

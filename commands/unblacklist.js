@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { removeFromBlacklist, isBlacklisted } = require('../data/blacklistStore');
 const { logModAction } = require('../data/modLogHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,6 +12,8 @@ module.exports = {
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const userId = interaction.options.getString('id').trim();
     const reason = interaction.options.getString('raison');
 

@@ -1,14 +1,17 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { canModerate } = require('../data/hierarchyHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('disconnect')
     .setDescription('Déconnecte un membre du vocal')
-    .setDefaultMemberPermissions(PermissionFlagsBits.MoveMembers)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à déconnecter').setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const target = await interaction.guild.members.fetch(interaction.options.getUser('membre').id).catch(() => null);
 
     if (!target) {

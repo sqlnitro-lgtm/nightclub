@@ -1,14 +1,17 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('addemoji')
     .setDescription('Ajoute un emoji au serveur')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuildExpressions)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption((opt) => opt.setName('nom').setDescription("Nom de l'emoji").setRequired(true).setMaxLength(32))
     .addAttachmentOption((opt) => opt.setName('image').setDescription("Image de l'emoji").setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const name = interaction.options.getString('nom').replace(/[^a-zA-Z0-9_]/g, '');
     const image = interaction.options.getAttachment('image');
 

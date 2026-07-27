@@ -1,104 +1,73 @@
 /**
  * helpText.js
  * ------------------------------------------------------------------
- * Génère le texte de /help filtré selon les permissions Discord
- * réelles de la personne (pas de whitelist personnalisée ici,
- * contrairement au bot Airline) : une ligne n'apparaît que si la
- * permission requise est vraie. Une section vide disparaît entièrement.
+ * Génère le texte de /help. Toutes les commandes de modération sont
+ * réservées aux Administrateurs (voir /giveadmin et data/permissionHelper.js) :
+ * un seul indicateur `isAdmin` (propriétaire du bot ou permission
+ * Administrator) décide si les sections de modération s'affichent.
  * ------------------------------------------------------------------
  */
 
 function section(emoji, title, lines) {
-  const visible = lines.filter((line) => line.show);
-  if (visible.length === 0) return '';
-  return `${emoji} **${title}**\n${visible.map((line) => line.text).join('\n')}`;
+  if (lines.length === 0) return '';
+  return `${emoji} **${title}**\n${lines.join('\n')}`;
 }
 
-/**
- * @param perms { manageRoles, administrator, moderateMembers, kickMembers,
- *   banMembers, manageChannels, muteMembers, deafenMembers, moveMembers,
- *   manageGuildExpressions, manageMessages, manageNicknames } — booléens,
- *   déjà résolus depuis interaction.member.permissions.
- */
-function buildHelpText(perms) {
-  const {
-    manageRoles,
-    administrator,
-    moderateMembers,
-    kickMembers,
-    banMembers,
-    manageChannels,
-    muteMembers,
-    deafenMembers,
-    moveMembers,
-    manageGuildExpressions,
-    manageMessages,
-    manageNicknames,
-  } = perms;
-
+function buildHelpText(isAdmin) {
   const sections = [
     section('🌐', 'Public', [
-      { show: true, text: '> **/ping** — Vérifie que le bot répond.' },
-      { show: true, text: '> **/help** — Cette liste.' },
-      { show: true, text: '> **=find** — Recherche un membre par pseudo, nom ou ID.' },
-    ]),
-
-    section('🎭', 'Rôles', [
-      { show: manageRoles, text: "> **/addrole** / **/removerole** — Ajoute/retire un rôle à un membre." },
-      { show: manageRoles, text: "> **/blr** — Bascule le statut BLR (bloque l'attribution de rôle)." },
-      { show: administrator, text: '> **/massrole** / **/massunrole** — Ajoute/retire un rôle à tous les membres.' },
-    ]),
-
-    section('🔨', 'Sanctions', [
-      { show: manageRoles, text: '> **/mute** / **/unmute** — Mute manuel (rôle Muted), durée fixe ou indéfini.' },
-      { show: moderateMembers, text: '> **/timeout** / **/untimeout** — Timeout natif Discord.' },
-      { show: moderateMembers, text: "> **/warn** / **/unwarn** / **/resetwarnings** — Avertissements." },
-      { show: moderateMembers, text: "> **/modlogs** — Historique de modération d'un membre." },
-      { show: kickMembers, text: '> **/kick** — Expulse un membre.' },
-      { show: banMembers, text: '> **/ban** / **/unban** / **/tempban** / **/softban** — Bannissements (définitif, temporaire, ou softban).' },
-    ]),
-
-    section('🔒', 'Salons', [
-      { show: manageChannels, text: '> **/lock** / **/unlock** — Verrouille/déverrouille un salon.' },
-      { show: administrator, text: '> **/lockall** / **/unlockall** — Verrouille/déverrouille tous les salons.' },
-      { show: manageChannels, text: '> **/hidechannel** / **/unhidechannel** — Masque/affiche un salon.' },
-      { show: manageChannels, text: '> **/createchannel** / **/deletechannel** / **/renamechannel** — Gère les salons.' },
-      { show: manageChannels, text: '> **/slowmode** / **/slowmodeoff** — Mode lent.' },
-    ]),
-
-    section('🔊', 'Vocal', [
-      { show: muteMembers, text: '> **/voicemute** / **/voiceunmute** — Coupe/réactive le micro en vocal.' },
-      { show: deafenMembers, text: '> **/voicedeafen** / **/voiceundeafen** — Rend sourd/entendant en vocal.' },
-      { show: moveMembers, text: '> **/move** / **/disconnect** — Déplace/déconnecte du vocal.' },
-      { show: moveMembers, text: "> **/followuser** — Te déplace automatiquement avec un membre (bascule)." },
-      { show: moveMembers, text: '> **=mv \\<id\\>** — Déplace un membre dans ton salon vocal.' },
-      { show: manageChannels, text: '> **=pv** — Bascule ton salon vocal courant privé/public.' },
-    ]),
-
-    section('👤', 'Pseudo', [
-      { show: manageNicknames, text: '> **/nick** / **/resetnickname** — Change/réinitialise le pseudo d\'un membre.' },
-    ]),
-
-    section('😀', 'Emojis', [
-      { show: manageGuildExpressions, text: '> **/addemoji** / **/removeemoji** — Gère les emojis du serveur.' },
-    ]),
-
-    section('🧹', 'Messages', [
-      { show: manageMessages, text: '> **/clear** — Supprime les derniers messages du salon.' },
-      { show: manageMessages, text: "> **/purge** — Supprime les messages d'un membre précis." },
-      { show: manageMessages, text: '> **/snipe** / **/editsnipe** — Dernier message supprimé/édité du salon.' },
-    ]),
-
-    section('⛔', 'Listes & Logs', [
-      { show: administrator, text: '> **/blacklist** / **/unblacklist** — Liste noire (re-ban automatique au retour).' },
-      { show: administrator, text: '> **/whitelist** / **/unwhitelist** — Liste blanche (protège du blacklist).' },
-      { show: administrator, text: '> **/logs** — Configure le salon de logs de modération.' },
-    ]),
-
-    section('👑', 'Administration', [
-      { show: administrator, text: '> **/giveadmin** / **/removeadmin** — Donne/retire le rôle Admin.' },
+      '> **/ping** — Vérifie que le bot répond.',
+      '> **/help** — Cette liste.',
+      '> **=find** — Recherche un membre par pseudo, nom ou ID.',
     ]),
   ];
+
+  if (isAdmin) {
+    sections.push(
+      section('🎭', 'Rôles', [
+        "> **/addrole** / **/removerole** — Ajoute/retire un rôle à un membre.",
+        "> **/blr** — Bascule le statut BLR (bloque l'attribution de rôle).",
+        '> **/massrole** / **/massunrole** — Ajoute/retire un rôle à tous les membres.',
+      ]),
+      section('🔨', 'Sanctions', [
+        '> **/mute** / **/unmute** — Mute manuel (rôle Muted), durée fixe ou indéfini.',
+        '> **/timeout** / **/untimeout** — Timeout natif Discord.',
+        "> **/warn** / **/unwarn** / **/resetwarnings** — Avertissements.",
+        "> **/modlogs** — Historique de modération d'un membre.",
+        '> **/kick** — Expulse un membre.',
+        '> **/ban** / **/unban** / **/tempban** / **/softban** — Bannissements (définitif, temporaire, ou softban).',
+      ]),
+      section('🐕', 'Fun', ['> **/dog** — Met un membre en laisse (pseudo verrouillé, te suit en vocal), ou le libère.']),
+      section('🔒', 'Salons', [
+        '> **/lock** / **/unlock** — Verrouille/déverrouille un salon.',
+        '> **/lockall** / **/unlockall** — Verrouille/déverrouille tous les salons.',
+        '> **/hidechannel** / **/unhidechannel** — Masque/affiche un salon.',
+        '> **/createchannel** / **/deletechannel** / **/renamechannel** — Gère les salons.',
+        '> **/slowmode** / **/slowmodeoff** — Mode lent.',
+      ]),
+      section('🔊', 'Vocal', [
+        '> **/voicemute** / **/voiceunmute** — Coupe/réactive le micro en vocal.',
+        '> **/voicedeafen** / **/voiceundeafen** — Rend sourd/entendant en vocal.',
+        '> **/move** / **/disconnect** — Déplace/déconnecte du vocal.',
+        "> **/followuser** — Te déplace automatiquement avec un membre (bascule).",
+        '> **=mv \\<id\\>** — Déplace un membre dans ton salon vocal.',
+        '> **=pv** — Bascule ton salon vocal courant privé/public.',
+      ]),
+      section('👤', 'Pseudo', ["> **/nick** / **/resetnickname** — Change/réinitialise le pseudo d'un membre."]),
+      section('😀', 'Emojis', ['> **/addemoji** / **/removeemoji** — Gère les emojis du serveur.']),
+      section('🧹', 'Messages', [
+        '> **/clear** — Supprime les derniers messages du salon.',
+        "> **/purge** — Supprime les messages d'un membre précis.",
+        '> **/snipe** / **/editsnipe** — Dernier message supprimé/édité du salon.',
+      ]),
+      section('⛔', 'Listes & Logs', [
+        '> **/blacklist** / **/unblacklist** — Liste noire (re-ban automatique au retour).',
+        '> **/whitelist** / **/unwhitelist** — Liste blanche (protège du blacklist).',
+        '> **/logs** — Configure le salon de logs de modération.',
+      ]),
+      section('👑', 'Administration', ['> **/giveadmin** / **/removeadmin** — Donne/retire le rôle Admin.'])
+    );
+  }
 
   return sections.filter(Boolean).join('\n\n');
 }

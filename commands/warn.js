@@ -2,16 +2,19 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('disc
 const { addWarn } = require('../data/warnStore');
 const { canModerate } = require('../data/hierarchyHelper');
 const { logModAction } = require('../data/modLogHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('warn')
     .setDescription('Avertit un membre')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription("Raison de l'avertissement").setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const target = await interaction.guild.members.fetch(interaction.options.getUser('membre').id).catch(() => null);
     const reason = interaction.options.getString('raison');
 

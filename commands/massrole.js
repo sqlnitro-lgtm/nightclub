@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { isBlr } = require('../data/blrStore');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -9,6 +10,8 @@ module.exports = {
     .addRoleOption((opt) => opt.setName('role').setDescription('Le rôle à attribuer à tous').setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const role = interaction.options.getRole('role');
 
     if (interaction.guild.members.me.roles.highest.position <= role.position) {

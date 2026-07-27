@@ -8,6 +8,7 @@ const { addToBlacklist, isBlacklisted } = require('../data/blacklistStore');
 const { isWhitelisted } = require('../data/accessListStore');
 const { canModerate } = require('../data/hierarchyHelper');
 const { logModAction } = require('../data/modLogHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -18,6 +19,8 @@ module.exports = {
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const targetUser = interaction.options.getUser('membre');
     const target = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
     const reason = interaction.options.getString('raison');

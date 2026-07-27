@@ -1,16 +1,19 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { isBlr } = require('../data/blrStore');
 const { canModerate } = require('../data/hierarchyHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('addrole')
     .setDescription("Ajoute un rôle à un membre")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
     .addRoleOption((opt) => opt.setName('role').setDescription('Le rôle à ajouter').setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const target = await interaction.guild.members.fetch(interaction.options.getUser('membre').id).catch(() => null);
     const role = interaction.options.getRole('role');
 

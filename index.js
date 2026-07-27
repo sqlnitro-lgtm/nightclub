@@ -107,6 +107,18 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 // --------------------------------------------------------------------
+// Laisse (/dog) : reverrouille le pseudo si la personne en laisse le
+// change tant que la laisse tient (le suivi vocal, lui, passe par le
+// listener voiceStateUpdate existant, réutilisé via voiceFollowStore).
+// --------------------------------------------------------------------
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+  const leash = getLeash(newMember.guild.id, newMember.id);
+  if (!leash) return;
+  if (newMember.nickname === leash.lockedNick) return;
+  await newMember.setNickname(leash.lockedNick, 'Pseudo verrouillé (laisse /dog active)').catch(() => {});
+});
+
+// --------------------------------------------------------------------
 // Snipe : mémorise le dernier message supprimé/édité de chaque salon
 // (voir /snipe, /editsnipe). Ignore les messages de bots.
 // --------------------------------------------------------------------

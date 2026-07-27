@@ -1,16 +1,19 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('move')
     .setDescription('Déplace un membre vers un autre salon vocal')
-    .setDefaultMemberPermissions(PermissionFlagsBits.MoveMembers)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à déplacer').setRequired(true))
     .addChannelOption((opt) =>
       opt.setName('salon').setDescription('Le salon vocal de destination').addChannelTypes(ChannelType.GuildVoice).setRequired(true)
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const target = await interaction.guild.members.fetch(interaction.options.getUser('membre').id).catch(() => null);
     const channel = interaction.options.getChannel('salon');
 

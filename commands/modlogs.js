@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { getHistory } = require('../data/modLogStore');
 const { getWarns } = require('../data/warnStore');
+const { requireAdmin } = require('../data/permissionHelper');
 
 const ACTION_LABEL = {
   kick: '👢 Expulsion',
@@ -23,10 +24,12 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('modlogs')
     .setDescription("Affiche l'historique de modération d'un membre")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const targetId = interaction.options.getUser('membre').id;
     const history = getHistory(interaction.guild.id, targetId);
     const warnCount = getWarns(interaction.guild.id, targetId).length;

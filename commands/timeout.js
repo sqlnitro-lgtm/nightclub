@@ -2,12 +2,13 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('disc
 const { canModerate } = require('../data/hierarchyHelper');
 const { DURATION_CHOICES, DURATION_MS, DURATION_LABEL } = require('../data/durationChoices');
 const { logModAction } = require('../data/modLogHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('timeout')
     .setDescription('Timeout natif Discord (coupe la communication) pour un membre')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true))
     .addStringOption((opt) =>
       opt.setName('duree').setDescription('Durée du timeout').setRequired(true).addChoices(...DURATION_CHOICES)
@@ -15,6 +16,8 @@ module.exports = {
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const target = await interaction.guild.members.fetch(interaction.options.getUser('membre').id).catch(() => null);
     const durationKey = interaction.options.getString('duree');
     const reason = interaction.options.getString('raison');

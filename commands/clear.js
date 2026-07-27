@@ -1,15 +1,18 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('clear')
     .setDescription('Supprime les derniers messages de ce salon')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addIntegerOption((opt) =>
       opt.setName('nombre').setDescription('Nombre de messages à supprimer (1-100)').setRequired(true).setMinValue(1).setMaxValue(100)
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const count = interaction.options.getInteger('nombre');
 
     await interaction.deferReply({ ephemeral: true });

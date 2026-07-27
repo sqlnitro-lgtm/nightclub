@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -7,6 +8,8 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     await interaction.deferReply();
 
     const textChannels = interaction.guild.channels.cache.filter((c) => c.type === ChannelType.GuildText);

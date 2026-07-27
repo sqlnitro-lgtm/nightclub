@@ -5,6 +5,7 @@
  * doit pas être déléguée à quelqu'un qui n'a pas déjà ce niveau.
  */
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 const ADMIN_ROLE_NAME = 'Admin';
 
@@ -16,6 +17,8 @@ module.exports = {
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const target = await interaction.guild.members.fetch(interaction.options.getUser('membre').id).catch(() => null);
     if (!target) {
       return interaction.reply({ content: 'Ce membre est introuvable sur ce serveur.', ephemeral: true });

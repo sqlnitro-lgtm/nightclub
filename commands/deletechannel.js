@@ -1,15 +1,18 @@
 const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('deletechannel')
     .setDescription('Supprime un salon')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption((opt) =>
       opt.setName('salon').setDescription('Le salon à supprimer (défaut : celui-ci)').addChannelTypes(ChannelType.GuildText, ChannelType.GuildVoice, ChannelType.GuildCategory).setRequired(false)
     ),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const channel = interaction.options.getChannel('salon') ?? interaction.channel;
     const name = channel.name;
 

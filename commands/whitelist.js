@@ -4,6 +4,7 @@
  */
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { addToWhitelist, isWhitelisted } = require('../data/accessListStore');
+const { requireAdmin } = require('../data/permissionHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -13,6 +14,8 @@ module.exports = {
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné').setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const targetId = interaction.options.getUser('membre').id;
 
     if (isWhitelisted(interaction.guild.id, targetId)) {

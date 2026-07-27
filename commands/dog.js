@@ -10,6 +10,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('disc
 const { getLeash, getLeashedByOwner, setLeash, removeLeash } = require('../data/leashStore');
 const { setFollow, clearFollow } = require('../data/voiceFollowStore');
 const { canModerate } = require('../data/hierarchyHelper');
+const { requireAdmin } = require('../data/permissionHelper');
 
 const DOG_EMOJI = '🐕';
 
@@ -17,10 +18,12 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('dog')
     .setDescription('Met un membre en laisse (ou le libère si déjà en laisse)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageNicknames)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à mettre en laisse / libérer').setRequired(true)),
 
   async execute(interaction) {
+    if (!(await requireAdmin(interaction))) return;
+
     const target = await interaction.guild.members.fetch(interaction.options.getUser('membre').id).catch(() => null);
     if (!target) {
       return interaction.reply({ content: 'Ce membre est introuvable sur ce serveur.', ephemeral: true });
