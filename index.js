@@ -21,6 +21,7 @@ const { getAllMutes, clearMute } = require('./data/muteStore');
 const { getAllTempBans, removeTempBan } = require('./data/tempBanStore');
 const { findMutedRole } = require('./data/mutedRoleHelper');
 const { logModAction } = require('./data/modLogHelper');
+const { getLeash } = require('./data/leashStore');
 
 const MV_PREFIX = '=mv';
 const PV_PREFIX = '=pv';
