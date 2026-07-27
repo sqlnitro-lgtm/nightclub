@@ -1,0 +1,16 @@
+# Dépendances
+node_modules/
+
+# Variables d'environnement (contient le token du bot)
+.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+desktop.ini
