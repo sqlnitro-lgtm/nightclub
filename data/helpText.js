@@ -68,7 +68,6 @@ function buildHelpText(isAdmin) {
       section('👑', 'Administration', [
         '> **=addmin \\<id\\>** — Donne le rôle Admin (sans id : liste les admins).',
         '> **=admin** — Liste tous les membres ayant le rôle Admin.',
-        '> **/removeadmin** — Retire le rôle Admin.',
       ])
     );
   }
