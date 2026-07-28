@@ -1,7 +1,7 @@
 /**
  * snipeStore.js - dernier message supprimé par salon (en mémoire uniquement,
  * perdu au redémarrage — usage volatil comme sur la plupart des bots de
- * modération). Voir /snipe.
+ * modération). Voir +snipe.
  */
 const deletedByChannel = new Map();
 

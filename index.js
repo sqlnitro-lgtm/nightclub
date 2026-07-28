@@ -16,7 +16,7 @@ const { Client, Collection, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder
 
 const { isBlacklisted } = require('./data/blacklistStore');
 const { addToWhitelist, removeFromWhitelist, isWhitelisted } = require('./data/accessListStore');
-const { recordDeleted } = require('./data/snipeStore');
+const { recordDeleted, getDeleted } = require('./data/snipeStore');
 const { getFollowTarget, getFollowersOf, setFollow, clearFollow } = require('./data/voiceFollowStore');
 const { getAllMutes, clearMute } = require('./data/muteStore');
 const { getAllTempBans, removeTempBan } = require('./data/tempBanStore');
@@ -41,6 +41,7 @@ const UNLOCK_PREFIX = '&unlock';
 const LOCKALL_PREFIX = '&lockall';
 const UNLOCKALL_PREFIX = '&unlockall';
 const BAN_PREFIX = '+ban';
+const SNIPE_PREFIX = '+snipe';
 const ADMIN_ROLE_NAME = 'Admin';
 const CHECK_INTERVAL_MS = 60 * 1000; // vérifie les mutes/tempbans expirés toutes les minutes
 
@@ -136,7 +137,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 
 // --------------------------------------------------------------------
 // Snipe : mémorise le dernier message supprimé de chaque salon (voir
-// /snipe). Ignore les messages de bots.
+// +snipe). Ignore les messages de bots.
 // --------------------------------------------------------------------
 client.on('messageDelete', (message) => {
   if (!message.guild || message.author?.bot) return;
@@ -224,6 +225,9 @@ client.on('messageCreate', async (message) => {
       return;
     case BAN_PREFIX:
       await handleBan(message, restArgs).catch((err) => console.error('[ban] Erreur :', err.message));
+      return;
+    case SNIPE_PREFIX:
+      await handleSnipe(message, restArgs).catch((err) => console.error('[snipe] Erreur :', err.message));
       return;
   }
 });
@@ -504,6 +508,35 @@ async function handleBan(message, rawArgs) {
 
   await logModAction(message.guild, { action: 'ban', target: { id: targetId }, moderator: message.author, reason }).catch(() => {});
   await message.reply(`<a:ableh:1525532035928690688> <@${targetId}> a été banni.` + (reason ? `\n**Raison :** ${reason}` : ''));
+}
+
+/** +snipe [#salon] : affiche le dernier message supprimé de ce salon (ou du salon mentionné). */
+async function handleSnipe(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const channelMatch = rawArgs.match(/<#(\d+)>/);
+  const channel = channelMatch ? await message.guild.channels.fetch(channelMatch[1]).catch(() => null) : message.channel;
+  if (!channel) {
+    await message.reply('Salon introuvable.');
+    return;
+  }
+
+  const entry = getDeleted(channel.id);
+  if (!entry) {
+    await message.reply(`Aucun message supprimé récemment dans <#${channel.id}>.`);
+    return;
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0xff6600)
+    .setAuthor({ name: entry.authorTag, iconURL: entry.authorAvatarURL ?? undefined })
+    .setDescription(entry.content || '*(aucun texte — probablement une image/embed)*')
+    .setFooter({ text: `Supprimé dans #${channel.name}` })
+    .setTimestamp(entry.at);
+
+  if (entry.imageURL) embed.setImage(entry.imageURL);
+
+  await message.reply({ embeds: [embed] });
 }
 
 /** =addmin <id> : donne le rôle Admin. Sans id : affiche la liste des admins (comme =admin). */

@@ -58,7 +58,7 @@ function buildHelpText(isAdmin) {
       section('🧹', 'Messages', [
         '> **/clear** — Supprime les derniers messages du salon.',
         "> **/purge** — Supprime les messages d'un membre précis.",
-        '> **/snipe** — Dernier message supprimé du salon.',
+        '> **+snipe [#salon]** — Dernier message supprimé du salon (celui-ci par défaut).',
       ]),
       section('⛔', 'Listes & Logs', [
         '> **/blacklist** / **/unblacklist** — Liste noire (re-ban automatique au retour).',
