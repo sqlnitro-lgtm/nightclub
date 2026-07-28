@@ -87,10 +87,27 @@ const UI_PREFIX = '=ui';
 const pendingPhotoSubmissions = new Map();
 const TICKET_PREFIX = '=ticket';
 const TICKET_CATEGORY_NAME = 'tickets';
+// Les emojis des boutons sont donnés sous forme d'objet { id, name, animated } :
+// c'est la seule façon d'utiliser un emoji personnalisé sur un bouton Discord.
 const TICKET_CATEGORIES = [
-  { value: 'admin', prefix: 'admin', label: 'Contacter les Admin', emoji: '👑' },
-  { value: 'contrib', prefix: 'contrib', label: 'Partenariat', emoji: '🤝' },
-  { value: 'abus', prefix: 'abus', label: 'Abus', emoji: '⚠️' },
+  {
+    value: 'admin',
+    prefix: 'admin',
+    label: 'Contacter les Admin',
+    emoji: { id: '1528368212528336946', name: 'Wcrown', animated: true },
+  },
+  {
+    value: 'contrib',
+    prefix: 'contrib',
+    label: 'Partenariat',
+    emoji: { id: '1526714684600750090', name: 'partner', animated: false },
+  },
+  {
+    value: 'abus',
+    prefix: 'abus',
+    label: 'Abus',
+    emoji: { id: '1525532083366137917', name: 'hkexc', animated: false },
+  },
 ];
 const LOCKALL_TYPES = [ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum];
 const ADMIN_ROLE_NAME = 'Admin';
@@ -1614,6 +1631,11 @@ async function handleUi(message, rawTarget) {
 }
 
 /** =ticket : poste le panneau (embed + 3 boutons) pour ouvrir un ticket. */
+/** Rend un emoji { id, name, animated } sous sa forme texte `<a:nom:id>`. */
+function formatEmoji(emoji) {
+  return `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>`;
+}
+
 async function handleTicketPanel(message) {
   if (!(await requireAdminMessage(message))) return;
 
@@ -1690,9 +1712,9 @@ async function handleTicketButton(interaction) {
 
   const welcomeEmbed = new EmbedBuilder()
     .setColor(0x9b59b6)
-    .setTitle('🍸 Bienvenue au salon privé')
+    .setTitle('Bienvenue au salon privé')
     .setDescription(
-      `${category.emoji} **${category.label}**\n` +
+      `${formatEmoji(category.emoji)} **${category.label}**\n` +
         "Explique-nous tout ici, un membre de l'équipe arrive vite. Une fois réglé, ferme ce salon avec le bouton ci-dessous."
     );
   const closeRow = new ActionRowBuilder().addComponents(
