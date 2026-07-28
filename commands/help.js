@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { buildHelpText } = require('../data/helpText');
 const { isOwner } = require('../data/ownerStore');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder().setName('help').setDescription('Liste des commandes disponibles (selon tes permissions)')
@@ -19,6 +20,6 @@ module.exports = {
           : 'Certaines commandes sont réservées aux admins et ne sont pas listées.',
       });
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

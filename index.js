@@ -1310,7 +1310,7 @@ async function handleChannelButton(interaction) {
   if (action === 'delete') {
     const channel = interaction.channel;
     const name = channel.name;
-    await interaction.reply({ content: `<a:1Kiss:1525528118352154674> Salon **${name}** supprimé.`, ephemeral: true });
+    await interaction.reply({ content: `Salon **${name}** supprimé.`, ephemeral: true });
     try {
       await channel.delete(`Supprimé par ${interaction.user.tag}`);
     } catch (err) {
@@ -1322,9 +1322,10 @@ async function handleChannelButton(interaction) {
   if (action === 'hide') {
     try {
       await interaction.channel.permissionOverwrites.edit(interaction.guild.id, { ViewChannel: false });
-      await interaction.reply({ content: `<a:FakeNitroEmoji:1525583069996650560> <#${interaction.channel.id}> est maintenant masqué pour @everyone.`, ephemeral: true });
+      await interaction.deferUpdate().catch(() => {});
+      await interaction.channel.send(`<a:FakeNitroEmoji:1525583069996650560> <#${interaction.channel.id}> est maintenant masqué pour @everyone.`);
     } catch (err) {
-      await interaction.reply({ content: `Impossible de masquer ce salon : \`${err.message}\`.`, ephemeral: true });
+      await interaction.reply({ content: `Impossible de masquer ce salon : \`${err.message}\`.`, ephemeral: true }).catch(() => {});
     }
     return;
   }
@@ -1332,9 +1333,10 @@ async function handleChannelButton(interaction) {
   if (action === 'unhide') {
     try {
       await interaction.channel.permissionOverwrites.edit(interaction.guild.id, { ViewChannel: null });
-      await interaction.reply({ content: `<:hkexc:1525532083366137917> <#${interaction.channel.id}> est de nouveau visible pour @everyone.`, ephemeral: true });
+      await interaction.deferUpdate().catch(() => {});
+      await interaction.channel.send(`<:hkexc:1525532083366137917> <#${interaction.channel.id}> est de nouveau visible pour @everyone.`);
     } catch (err) {
-      await interaction.reply({ content: `Impossible de rendre ce salon visible : \`${err.message}\`.`, ephemeral: true });
+      await interaction.reply({ content: `Impossible de rendre ce salon visible : \`${err.message}\`.`, ephemeral: true }).catch(() => {});
     }
   }
 }
@@ -1349,9 +1351,10 @@ async function handleChannelModal(interaction) {
     const name = interaction.fields.getTextInputValue('nom');
     try {
       const channel = await interaction.guild.channels.create({ name, type: ChannelType.GuildText, reason: `Créé par ${interaction.user.tag}` });
-      await interaction.reply({ content: `<a:1Kiss:1525528118352154674> Salon <#${channel.id}> créé.`, ephemeral: true });
+      await interaction.deferUpdate().catch(() => {});
+      await interaction.channel.send(`<a:1Kiss:1525528118352154674> Salon <#${channel.id}> créé.`);
     } catch (err) {
-      await interaction.reply({ content: `Impossible de créer ce salon : \`${err.message}\`.`, ephemeral: true });
+      await interaction.reply({ content: `Impossible de créer ce salon : \`${err.message}\`.`, ephemeral: true }).catch(() => {});
     }
     return;
   }
@@ -1362,9 +1365,10 @@ async function handleChannelModal(interaction) {
     const oldName = channel.name;
     try {
       await channel.setName(newName, `Renommé par ${interaction.user.tag}`);
-      await interaction.reply({ content: `<a:1Kiss:1525528118352154674> Salon **${oldName}** renommé en **${newName}**.`, ephemeral: true });
+      await interaction.deferUpdate().catch(() => {});
+      await interaction.channel.send(`<a:1Kiss:1525528118352154674> Salon **${oldName}** renommé en **${newName}**.`);
     } catch (err) {
-      await interaction.reply({ content: `Impossible de renommer ce salon : \`${err.message}\`.`, ephemeral: true });
+      await interaction.reply({ content: `Impossible de renommer ce salon : \`${err.message}\`.`, ephemeral: true }).catch(() => {});
     }
   }
 }
@@ -1696,12 +1700,15 @@ async function handleTicketButton(interaction) {
   );
   await channel.send({ content: `<@${interaction.user.id}>`, embeds: [welcomeEmbed], components: [closeRow] });
 
-  await interaction.editReply(`<a:1Kiss:1525528118352154674> Ticket créé : <#${channel.id}>`);
+  await interaction.editReply(`Ticket créé : <#${channel.id}>`);
 }
 
 /** Clic sur "Fermer le ticket" : journalise puis supprime le salon. */
 async function handleTicketClose(interaction) {
-  await interaction.reply('<a:1Kiss:1525528118352154674> Fermeture du ticket en cours...');
+  // Accusé de réception silencieux : le message visible part du salon, pour
+  // que les emojis personnalisés s'affichent (voir data/respond.js).
+  await interaction.deferUpdate().catch(() => {});
+  await interaction.channel.send('<a:1Kiss:1525528118352154674> Fermeture du ticket en cours...').catch(() => {});
 
   const topic = interaction.channel.topic ?? '';
   const openerMatch = topic.match(/(\d{17,20})/);
