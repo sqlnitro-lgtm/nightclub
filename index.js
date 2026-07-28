@@ -29,6 +29,7 @@ const {
   TextInputStyle,
   AuditLogEvent,
   Partials,
+  ActivityType,
 } = require('discord.js');
 
 const { isBlacklisted, addToBlacklist, removeFromBlacklist } = require('./data/blacklistStore');
@@ -44,7 +45,15 @@ const { canModerate } = require('./data/hierarchyHelper');
 const { addWarn, getWarns, removeWarn } = require('./data/warnStore');
 const { getLockAll, setLockAll, clearLockAll } = require('./data/lockAllStore');
 const { getLinkedGroups, addLinkedGroup } = require('./data/linkedRolesStore');
-const { getConfig: getSpConfig, setChannel: setSpChannel, disable: disableSp } = require('./data/photoSubmitStore');
+const {
+  getChannelId: getSpChannelId,
+  getAllActive: getSpActive,
+  setChannel: setSpChannel,
+  disable: disableSp,
+  isSubmitChannel,
+} = require('./data/photoSubmitStore');
+const automod = require('./data/automodStore');
+const { getHandcuff, setHandcuff, removeHandcuff } = require('./data/handcuffStore');
 const { isGuildApproved, approveGuild } = require('./data/approvedGuildsStore');
 const { OWNER_IDS, isOwner } = require('./data/ownerStore');
 const { requireAdmin, requireAdminMessage } = require('./data/permissionHelper');
@@ -71,17 +80,22 @@ const MUET_PREFIX = '&muet';
 const SOURD_PREFIX = '&sourd';
 const LINK_PREFIX = '=link';
 const SP_PREFIX = '=s&p';
+const AUTOMOD_PREFIX = '=automod';
+const MOD_PREFIX = '=mod';
+const MENOTTE_PREFIX = '=menotte';
+const UI_PREFIX = '=ui';
 const pendingPhotoSubmissions = new Map();
 const TICKET_PREFIX = '=ticket';
 const TICKET_CATEGORY_NAME = 'tickets';
 const TICKET_CATEGORIES = [
+  { value: 'admin', prefix: 'admin', label: 'Contacter les Admin', emoji: '👑' },
+  { value: 'contrib', prefix: 'contrib', label: 'Partenariat', emoji: '🤝' },
   { value: 'abus', prefix: 'abus', label: 'Abus', emoji: '⚠️' },
-  { value: 'contrib', prefix: 'contrib', label: 'Contrib / Partenariat', emoji: '🤝' },
-  { value: 'admin', prefix: 'admin', label: 'Contacter les admins', emoji: '👑' },
 ];
 const LOCKALL_TYPES = [ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum];
 const ADMIN_ROLE_NAME = 'Admin';
 const CHECK_INTERVAL_MS = 60 * 1000; // vérifie les mutes/tempbans expirés toutes les minutes
+const DISCORD_CREATION_TS = Date.UTC(2015, 4, 13); // 13 mai 2015, sortie de Discord
 
 const client = new Client({
   intents: [
@@ -194,6 +208,19 @@ client.on('guildCreate', async (guild) => {
 // --------------------------------------------------------------------
 client.once('clientReady', () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
+
+  // Présence : "Regarde ..." avec un compteur qui part de la création de
+  // Discord (13 mai 2015), comme demandé.
+  client.user.setPresence({
+    status: 'online',
+    activities: [
+      {
+        name: "PV\npv bot t'interrese ? mp affow.",
+        type: ActivityType.Watching,
+        timestamps: { start: DISCORD_CREATION_TS },
+      },
+    ],
+  });
 
   for (const guild of client.guilds.cache.values()) {
     if (!isGuildApproved(guild.id)) {
@@ -387,6 +414,16 @@ client.on('messageDelete', (message) => {
 client.on('voiceStateUpdate', async (oldState, newState) => {
   logVoiceStateChange(oldState, newState).catch((err) => console.error('[voice-log] Erreur :', err.message));
 
+  // Menotte (=menotte) : ramène la personne dans son salon dès qu'elle bouge.
+  // La menotte ne tombe JAMAIS toute seule (ni en se déconnectant, ni au
+  // redémarrage du bot) : seul un admin qui refait `=menotte <id>` la retire.
+  const userId = newState.id ?? oldState.id;
+  const cuff = getHandcuff(userId);
+  if (cuff && newState.channelId && newState.channelId !== cuff.channelId) {
+    await newState.setChannel(cuff.channelId, 'Menotté(e) (=menotte)').catch((err) => console.error('[menotte] Impossible de ramener :', err.message));
+    return;
+  }
+
   if (!newState.channel || newState.channel.id === oldState.channelId) return;
 
   const followers = getFollowersOf(newState.member.id);
@@ -430,11 +467,19 @@ async function logVoiceStateChange(oldState, newState) {
 client.on('messageCreate', async (message) => {
   if (message.author.bot || message.guild) return; // uniquement les MP
 
-  const config = getSpConfig();
-  if (!config.enabled) return;
-
   const image = message.attachments.find((a) => a.contentType?.startsWith('image/'));
   if (!image) return;
+
+  // Un serveur n'est proposé que si la personne en est membre : sinon elle
+  // pourrait poster sur des serveurs qu'elle ne fréquente pas.
+  const active = [];
+  for (const entry of getSpActive()) {
+    const guild = client.guilds.cache.get(entry.guildId);
+    if (!guild) continue;
+    const member = await guild.members.fetch(message.author.id).catch(() => null);
+    if (member) active.push({ ...entry, guild });
+  }
+  if (active.length === 0) return;
 
   const token = Math.random().toString(36).slice(2, 10);
   pendingPhotoSubmissions.set(token, {
@@ -444,16 +489,37 @@ client.on('messageCreate', async (message) => {
   });
   setTimeout(() => pendingPhotoSubmissions.delete(token), 10 * 60 * 1000);
 
+  // Un seul serveur : on va droit au choix Homme/Femme. Plusieurs : on fait
+  // d'abord choisir le serveur de destination.
+  if (active.length === 1) {
+    await message.channel.send(buildSpGenderPrompt(token, active[0].guildId, image.url)).catch(() => {});
+    return;
+  }
+
   const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setDescription('Choisis une catégorie pour ta photo :')
+    .setColor(0x9b59b6)
+    .setTitle('📸 Où veux-tu envoyer cette photo ?')
     .setImage(image.url);
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`nc_sp:${token}:male`).setLabel('Homme').setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId(`nc_sp:${token}:female`).setLabel('Femme').setStyle(ButtonStyle.Danger)
+    active.slice(0, 5).map((entry) =>
+      new ButtonBuilder().setCustomId(`nc_sp:${token}:guild:${entry.guildId}`).setLabel(entry.guild.name.slice(0, 80)).setStyle(ButtonStyle.Secondary)
+    )
   );
   await message.channel.send({ embeds: [embed], components: [row] }).catch(() => {});
 });
+
+/** Message proposant le choix Homme/Femme pour une photo, sur un serveur donné. */
+function buildSpGenderPrompt(token, guildId, imageUrl) {
+  const embed = new EmbedBuilder()
+    .setColor(0x9b59b6)
+    .setTitle('📸 Choisis ta catégorie')
+    .setImage(imageUrl);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`nc_sp:${token}:male:${guildId}`).setLabel('Homme').setEmoji('👨').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`nc_sp:${token}:female:${guildId}`).setLabel('Femme').setEmoji('👩').setStyle(ButtonStyle.Danger)
+  );
+  return { embeds: [embed], components: [row] };
+}
 
 // --------------------------------------------------------------------
 // Commandes préfixées : =mv (déplace un membre dans ton salon vocal),
@@ -462,15 +528,19 @@ client.on('messageCreate', async (message) => {
 // --------------------------------------------------------------------
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
+  if (isGuildPendingApproval(message.guild)) return; // serveur pas encore autorisé
 
   // Salon de soumission photo (=s&p) : ne garde que les images postées par le
   // bot — tout message envoyé directement dans ce salon (hors fils, qui ont
   // leur propre ID de salon) est supprimé.
-  const spConfig = getSpConfig();
-  if (spConfig.enabled && message.channel.id === spConfig.channelId) {
+  if (isSubmitChannel(message.channel.id)) {
     await message.delete().catch(() => {});
     return;
   }
+
+  // Automod (=automod / =mod) : supprime les messages contenant un mot
+  // interdit, contournements compris. Les admins ne sont pas filtrés.
+  if (await enforceAutomod(message)) return;
 
   const content = message.content.trim();
   const lower = content.toLowerCase();
@@ -553,8 +623,52 @@ client.on('messageCreate', async (message) => {
     case TICKET_PREFIX:
       await handleTicketPanel(message).catch((err) => console.error('[ticket] Erreur :', err.message));
       return;
+    case AUTOMOD_PREFIX:
+      await handleAutomod(message).catch((err) => console.error('[automod] Erreur :', err.message));
+      return;
+    case MOD_PREFIX:
+      await handleMod(message, restArgs).catch((err) => console.error('[mod] Erreur :', err.message));
+      return;
+    case MENOTTE_PREFIX:
+      await handleMenotte(message, restArgs).catch((err) => console.error('[menotte] Erreur :', err.message));
+      return;
+    case UI_PREFIX:
+      await handleUi(message, restArgs).catch((err) => console.error('[ui] Erreur :', err.message));
+      return;
   }
 });
+
+/**
+ * Applique l'automod : supprime le message s'il contient un mot interdit.
+ * Retourne true si le message a été supprimé. Les admins bot en sont exemptés.
+ */
+async function enforceAutomod(message) {
+  if (!message.content) return false;
+  if (isOwner(message.author.id)) return false;
+  if (message.member?.permissions.has(PermissionFlagsBits.Administrator)) return false;
+
+  const banned = automod.findBannedWord(message.guild.id, message.content);
+  if (!banned) return false;
+
+  await message.delete().catch(() => {});
+
+  const warning = await message.channel
+    .send(`<:egirl:1526275509464469615> <@${message.author.id}>, ce mot est interdit ici.`)
+    .catch(() => null);
+  if (warning) setTimeout(() => warning.delete().catch(() => {}), 5000);
+
+  await logEvent(message.guild, {
+    title: 'Automod — message supprimé',
+    color: 0xff6600,
+    description:
+      `**Auteur :** <@${message.author.id}>\n` +
+      `**Salon :** <#${message.channel.id}>\n` +
+      `**Mot interdit :** \`${banned}\`\n` +
+      `**Message :**\n${message.content.slice(0, 900)}`,
+  }).catch(() => {});
+
+  return true;
+}
 
 function extractId(raw) {
   const match = raw.match(/\d{17,20}/);
@@ -1286,65 +1400,213 @@ async function handleSp(message, rawArgs) {
   if (!(await requireAdminMessage(message))) return;
 
   const channelMatch = rawArgs.match(/<#(\d+)>/);
-  const config = getSpConfig();
+  const currentId = getSpChannelId(message.guild.id);
 
   if (!channelMatch) {
     await message.channel.send(
-      config.enabled && config.channelId
-        ? `Soumission photo activée — salon actuel : <#${config.channelId}>.`
-        : `Soumission photo désactivée. Usage : \`${SP_PREFIX} #salon\` pour activer/changer (relance sur le même salon pour désactiver).`
+      currentId
+        ? `Soumission photo activée sur ce serveur — salon : <#${currentId}>.`
+        : `Soumission photo désactivée ici. Usage : \`${SP_PREFIX} #salon\` (relance sur le même salon pour désactiver).`
     );
     return;
   }
 
   const channelId = channelMatch[1];
-  if (config.enabled && config.channelId === channelId) {
-    disableSp();
+  if (currentId === channelId) {
+    disableSp(message.guild.id);
     await message.channel.send(`<a:1Kiss:1525528118352154674> Soumission photo désactivée (<#${channelId}> ne recevra plus les soumissions).`);
     return;
   }
 
   setSpChannel(message.guild.id, channelId);
-  await message.channel.send(`<a:1Kiss:1525528118352154674> Soumission photo activée — les photos reçues en MP seront postées dans <#${channelId}>.`);
+  await message.channel.send(
+    currentId
+      ? `<a:1Kiss:1525528118352154674> Salon de soumission déplacé de <#${currentId}> vers <#${channelId}>.`
+      : `<a:1Kiss:1525528118352154674> Soumission photo activée — les photos reçues en MP seront postées dans <#${channelId}>.`
+  );
 }
 
-/** Clic sur Homme/Femme suite à une photo envoyée en MP (=s&p) : poste l'image dans le salon configuré. */
+/** Clic sur un bouton de soumission photo : choix du serveur, puis Homme/Femme. */
 async function handleSpButton(interaction) {
-  const [, token, gender] = interaction.customId.split(':');
+  const [, token, action, guildId] = interaction.customId.split(':');
   const pending = pendingPhotoSubmissions.get(token);
   if (!pending) {
-    await interaction.reply({ content: 'Cette soumission a expiré.', ephemeral: true });
-    return;
-  }
-  pendingPhotoSubmissions.delete(token);
-
-  const config = getSpConfig();
-  if (!config.enabled || !config.channelId) {
-    await interaction.reply({ content: "La soumission de photos n'est plus activée.", ephemeral: true });
+    await interaction.reply({ content: 'Cette soumission a expiré, renvoie ta photo.', ephemeral: true });
     return;
   }
 
-  const guild = await client.guilds.fetch(config.guildId).catch(() => null);
-  const channel = guild ? await guild.channels.fetch(config.channelId).catch(() => null) : null;
+  // Première étape (plusieurs serveurs possibles) : on a choisi le serveur,
+  // on propose maintenant la catégorie.
+  if (action === 'guild') {
+    await interaction.update(buildSpGenderPrompt(token, guildId, pending.imageUrl)).catch(() => {});
+    return;
+  }
+
+  const channelId = getSpChannelId(guildId);
+  if (!channelId) {
+    await interaction.reply({ content: "La soumission de photos n'est plus activée sur ce serveur.", ephemeral: true });
+    return;
+  }
+
+  const guild = await client.guilds.fetch(guildId).catch(() => null);
+  const channel = guild ? await guild.channels.fetch(channelId).catch(() => null) : null;
   if (!channel) {
     await interaction.reply({ content: 'Le salon configuré est introuvable.', ephemeral: true });
     return;
   }
 
-  const genderLabel = gender === 'male' ? 'Homme' : 'Femme';
+  pendingPhotoSubmissions.delete(token);
+
+  const genderLabel = action === 'male' ? 'Homme' : 'Femme';
   const embed = new EmbedBuilder()
-    .setColor(gender === 'male' ? 0x3498db : 0xe91e63)
-    .setDescription(`**${genderLabel}** — soumis par ${pending.authorTag}`)
+    .setColor(action === 'male' ? 0x3498db : 0xe91e63)
+    .setDescription(`**${genderLabel}** — envoyé par <@${pending.authorId}>`)
     .setImage(pending.imageUrl);
 
   const posted = await channel.send({ embeds: [embed] }).catch(() => null);
   if (posted) {
     await posted.react('✅').catch(() => {});
     await posted.react('🚫').catch(() => {});
-    await posted.startThread({ name: pending.authorTag, autoArchiveDuration: 1440 }).catch(() => {});
+    await posted.startThread({ name: pending.authorTag.slice(0, 100), autoArchiveDuration: 1440 }).catch(() => {});
   }
 
-  await interaction.reply({ content: '<a:1Kiss:1525528118352154674> Photo envoyée !', ephemeral: true }).catch(() => {});
+  await interaction
+    .update({ content: `<a:1Kiss:1525528118352154674> Photo envoyée sur **${guild.name}** !`, embeds: [], components: [] })
+    .catch(() => {});
+}
+
+/** =automod : active/désactive la suppression automatique des mots interdits. */
+async function handleAutomod(message) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const { enabled, words, seeded } = automod.toggleEnabled(message.guild.id);
+
+  if (!enabled) {
+    await message.channel.send('<a:1Kiss:1525528118352154674> Automod **désactivé**.');
+    return;
+  }
+
+  await message.channel.send(
+    `<a:1Kiss:1525528118352154674> Automod **activé** — ${words.length} mot(s) filtré(s)` +
+      (seeded ? ' (liste de base installée : insultes racistes, homophobes et violences sexuelles).' : '.') +
+      `\nVoir la liste : \`${MOD_PREFIX}\` · Ajouter/retirer : \`${MOD_PREFIX} <mot>\``
+  );
+}
+
+/** =mod <mot> : ajoute (ou retire) un mot interdit, un seul à la fois. Sans argument : la liste. */
+async function handleMod(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const { enabled, words } = automod.getConfig(message.guild.id);
+
+  if (!rawArgs) {
+    const embed = new EmbedBuilder()
+      .setColor(0x9b59b6)
+      .setTitle(`🛑 Mots interdits (${words.length})`)
+      .setDescription(words.length ? words.map((w) => `\`${w}\``).join(' · ') : '*Aucun mot pour le moment.*')
+      .setFooter({ text: enabled ? 'Automod actif' : `Automod inactif — active-le avec ${AUTOMOD_PREFIX}` });
+    await message.channel.send({ embeds: [embed] });
+    return;
+  }
+
+  if (/\s/.test(rawArgs.trim())) {
+    await message.channel.send(`Un seul mot à la fois : \`${MOD_PREFIX} <mot>\`.`);
+    return;
+  }
+
+  const { added, word } = automod.toggleWord(message.guild.id, rawArgs.trim());
+  if (!word) {
+    await message.channel.send('Ce mot ne contient aucune lettre exploitable.');
+    return;
+  }
+
+  await message.channel.send(
+    added
+      ? `<a:1Kiss:1525528118352154674> \`${word}\` ajouté aux mots interdits (dérivés et contournements compris).${enabled ? '' : `\n*Pense à activer l'automod avec \`${AUTOMOD_PREFIX}\`.*`}`
+      : `<a:1Kiss:1525528118352154674> \`${word}\` retiré des mots interdits.`
+  );
+}
+
+/** =menotte <id> : bascule la menotte — la cible est ramenée dans son salon vocal si elle bouge. */
+async function handleMenotte(message, rawTarget) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const targetId = extractId(rawTarget);
+  if (!targetId) {
+    await message.channel.send(`Usage : \`${MENOTTE_PREFIX} <id ou @membre>\`.`);
+    return;
+  }
+
+  if (removeHandcuff(targetId)) {
+    await message.channel.send(`<a:1Kiss:1525528118352154674> <@${targetId}> n'est plus menotté(e).`);
+    return;
+  }
+
+  const target = await message.guild.members.fetch(targetId).catch(() => null);
+  if (!target) {
+    await message.channel.send('Ce membre est introuvable sur ce serveur.');
+    return;
+  }
+
+  const modCheck = canModerate(message.guild, message.member, target);
+  if (!modCheck.ok) return message.channel.send(modCheck.reason);
+
+  if (!target.voice.channelId) {
+    await message.channel.send(`<@${targetId}> doit être en vocal pour être menotté(e).`);
+    return;
+  }
+
+  setHandcuff(targetId, { holderId: message.author.id, channelId: target.voice.channelId, guildId: message.guild.id });
+  await message.channel.send(
+    `<:argent:1525538360322687097> <@${targetId}> est menotté(e) dans **${target.voice.channel.name}** — il/elle y sera ramené(e) à chaque tentative de changement, jusqu'à ce qu'un admin relance \`${MENOTTE_PREFIX} ${targetId}\`.`
+  );
+}
+
+const UI_STATUS = {
+  online: { emoji: '🟢', label: 'En ligne' },
+  idle: { emoji: '🟠', label: 'Inactif' },
+  dnd: { emoji: '🔴', label: 'Ne pas déranger' },
+  offline: { emoji: '⚫', label: 'Hors ligne' },
+};
+
+/** =ui [id] : fiche d'informations d'un membre (soi-même par défaut). */
+async function handleUi(message, rawTarget) {
+  const targetId = extractId(rawTarget) ?? message.author.id;
+
+  const member = await message.guild.members.fetch({ user: targetId, force: true }).catch(() => null);
+  if (!member) {
+    await message.channel.send('Membre introuvable sur ce serveur.');
+    return;
+  }
+
+  const user = member.user;
+  const status = member.presence?.status ?? 'offline';
+  const { emoji, label } = UI_STATUS[status] ?? UI_STATUS.offline;
+
+  const roles = member.roles.cache
+    .filter((role) => role.id !== message.guild.id)
+    .sort((a, b) => b.position - a.position)
+    .map((role) => `<@&${role.id}>`);
+
+  const createdTs = Math.floor(user.createdTimestamp / 1000);
+  const joinedTs = member.joinedTimestamp ? Math.floor(member.joinedTimestamp / 1000) : null;
+
+  const embed = new EmbedBuilder()
+    .setColor(member.displayColor || 0x9b59b6)
+    .setAuthor({ name: user.tag, iconURL: user.displayAvatarURL() })
+    .setThumbnail(user.displayAvatarURL({ size: 256 }))
+    .addFields(
+      { name: 'Membre', value: `<@${user.id}>\n\`${user.id}\``, inline: true },
+      { name: 'Statut', value: `${emoji} ${label}`, inline: true },
+      { name: 'Vocal', value: member.voice.channel ? `<#${member.voice.channel.id}>` : 'Pas en vocal', inline: true },
+      {
+        name: 'Dates',
+        value: `Compte créé : <t:${createdTs}:D> (<t:${createdTs}:R>)\n${joinedTs ? `A rejoint : <t:${joinedTs}:D> (<t:${joinedTs}:R>)` : 'A rejoint : inconnu'}`,
+      },
+      { name: `Rôles (${roles.length})`, value: roles.length ? roles.slice(0, 25).join(' ') : 'Aucun rôle' }
+    );
+
+  await message.channel.send({ embeds: [embed] });
 }
 
 /** =ticket : poste le panneau (embed + 3 boutons) pour ouvrir un ticket. */
@@ -1353,10 +1615,12 @@ async function handleTicketPanel(message) {
 
   const embed = new EmbedBuilder()
     .setColor(0x9b59b6)
-    .setTitle('🍸 Le bar à tickets du club')
     .setDescription(
-      "Une question, un souci, une envie de collaborer ? Pousse la bonne porte ci-dessous et l'équipe s'occupe de toi.\n\n" +
-        TICKET_CATEGORIES.map((c) => `${c.emoji} **${c.label}**`).join('\n')
+      '<a:Wcrown:1528368212528336946> **__TICKET PV POUR LE MEILLEUR SERVEUR PV__ !**\n\n' +
+        '> <a:arrow_pretty:1526711980059136021> Tu as besoin de renseignement ? ( Contacte les Admin )\n\n' +
+        '> <a:arrow_pretty:1526711980059136021> Tu souhaite contribuer / fusionner afin d\'aider au développement ? ( Partenariat )\n\n' +
+        '> <a:arrow_pretty:1526711980059136021> Ou bien tu souhaite te plaindre d\'un abus ! ( Abus )\n\n' +
+        '<a:hkhi:1525582949708468374> **Pousse la bonne porte ci-dessous et l\'équipe s\'occupe de toi.**'
     );
 
   const row = new ActionRowBuilder().addComponents(
@@ -1534,15 +1798,25 @@ async function handleAdminList(message) {
   if (!(await requireAdminMessage(message))) return;
 
   const role = message.guild.roles.cache.find((r) => r.name === ADMIN_ROLE_NAME);
-  if (!role || role.members.size === 0) {
-    await message.channel.send('Aucun membre n\'a le rôle Admin pour le moment.');
+  if (!role) {
+    await message.channel.send(`Aucun rôle **${ADMIN_ROLE_NAME}** n'existe encore — donne-le à quelqu'un avec \`${ADMIN_PREFIX} <id>\`.`);
     return;
   }
 
-  const lines = [...role.members.values()].map((m) => `**${m.user.tag}** (\`${m.id}\`)`);
+  // role.members ne lit que le cache : sans ce fetch, la liste est vide tant
+  // que les membres n'ont pas été chargés (cause du "aucun membre" à tort).
+  await message.guild.members.fetch().catch(() => {});
+
+  const members = [...role.members.values()];
+  if (members.length === 0) {
+    await message.channel.send(`Personne n'a le rôle **${ADMIN_ROLE_NAME}** pour le moment.`);
+    return;
+  }
+
+  const lines = members.map((m) => `<@${m.id}> — \`${m.id}\``);
   const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('Membres avec le rôle Admin')
+    .setColor(0x9b59b6)
+    .setTitle(`👑 Admins du serveur (${members.length})`)
     .setDescription(lines.join('\n'));
   await message.channel.send({ embeds: [embed] });
 }

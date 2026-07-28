@@ -10,9 +10,14 @@ module.exports = {
     const isAdmin = isOwner(interaction.user.id) || interaction.member.permissions.has(PermissionFlagsBits.Administrator);
 
     const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setTitle('<a:noeudbleu:1526275226613317693> Commandes du serveur')
-      .setDescription(buildHelpText(isAdmin));
+      .setColor(0x9b59b6)
+      .setTitle('<a:noeudbleu:1526275226613317693> Commandes du bot')
+      .setDescription(buildHelpText(isAdmin))
+      .setFooter({
+        text: isAdmin
+          ? 'Les commandes de modération sont réservées aux admins (=admin).'
+          : 'Certaines commandes sont réservées aux admins et ne sont pas listées.',
+      });
 
     await interaction.reply({ embeds: [embed], ephemeral: true });
   },

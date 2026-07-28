@@ -29,3 +29,5 @@ data/lockAll.json
 data/linkedRoles.json
 data/photoSubmit.json
 data/approvedGuilds.json
+data/automod.json
+data/handcuffs.json
