@@ -113,6 +113,13 @@ const LOCKALL_TYPES = [ChannelType.GuildText, ChannelType.GuildAnnouncement, Cha
 const ADMIN_ROLE_NAME = 'Admin';
 const CHECK_INTERVAL_MS = 60 * 1000; // vérifie les mutes/tempbans expirés toutes les minutes
 const DISCORD_CREATION_TS = Date.UTC(2015, 4, 13); // 13 mai 2015, sortie de Discord
+const PRESENCE_REFRESH_MS = 10 * 60 * 1000;
+const PRESENCE_NAME = 'PRIVATE';
+const PRESENCE_DETAILS = 'PRIVATE';
+const PRESENCE_STATE = "pv bot t'interrese ? mp affow.";
+// Réactions posées sur les photos reçues par MP (=s&p) : oui / non.
+const VOTE_UP_EMOJI = 'satoru:1529689009595486368';
+const VOTE_DOWN_EMOJI = 'a:white_girl:1528366482768269473';
 
 const client = new Client({
   intents: [
@@ -220,24 +227,64 @@ client.on('guildCreate', async (guild) => {
   await requestGuildApproval(guild).catch((err) => console.error('[approval] Erreur :', err.message));
 });
 
+/**
+ * Présence enrichie (grande image + compteur), envoyée en charge gateway
+ * BRUTE. On ne peut pas passer par client.user.setPresence : discord.js ne
+ * recopie que `type`, `name`, `state` et `url` dans le paquet, et jette
+ * silencieusement `timestamps`, `details` et `assets` — donc ni image ni
+ * chronomètre. Ici on écrit le paquet nous-mêmes.
+ */
+function applyRichPresence() {
+  const user = client.user;
+  if (!user) return;
+
+  // La grande image passe par le proxy média de Discord ("mp:") pointé sur
+  // l'avatar du bot ; le .gif n'est correct que pour un avatar animé (a_...).
+  const avatarHash = user.avatar;
+  const assets = avatarHash
+    ? {
+        large_image: `mp:avatars/${user.id}/${avatarHash}.${avatarHash.startsWith('a_') ? 'gif' : 'png'}`,
+        large_text: PRESENCE_NAME,
+      }
+    : undefined;
+
+  const payload = {
+    op: 3, // PresenceUpdate
+    d: {
+      since: null,
+      afk: false,
+      status: 'online',
+      activities: [
+        {
+          name: PRESENCE_NAME,
+          type: 3, // Watching -> "Regarde ..."
+          application_id: user.id,
+          details: PRESENCE_DETAILS,
+          state: PRESENCE_STATE,
+          timestamps: { start: DISCORD_CREATION_TS },
+          ...(assets ? { assets } : {}),
+        },
+      ],
+    },
+  };
+
+  try {
+    client.ws.broadcast(payload);
+  } catch (err) {
+    console.error('[presence] Envoi impossible :', err.message);
+  }
+}
+
 // --------------------------------------------------------------------
 // Prêt
 // --------------------------------------------------------------------
 client.once('clientReady', () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
 
-  // Présence : "Regarde ..." avec un compteur qui part de la création de
-  // Discord (13 mai 2015), comme demandé.
-  client.user.setPresence({
-    status: 'online',
-    activities: [
-      {
-        name: "PV\npv bot t'interrese ? mp affow.",
-        type: ActivityType.Watching,
-        timestamps: { start: DISCORD_CREATION_TS },
-      },
-    ],
-  });
+  applyRichPresence();
+  // Discord efface la présence d'un bot au bout d'un moment (et à chaque
+  // reconnexion du gateway) : on la repose régulièrement.
+  setInterval(applyRichPresence, PRESENCE_REFRESH_MS);
 
   for (const guild of client.guilds.cache.values()) {
     if (!isGuildApproved(guild.id)) {
@@ -1486,8 +1533,14 @@ async function handleSpButton(interaction) {
 
   const posted = await channel.send({ embeds: [embed] }).catch(() => null);
   if (posted) {
-    await posted.react('✅').catch(() => {});
-    await posted.react('🚫').catch(() => {});
+    // Réactions en emojis personnalisés : possible parce que le bot est
+    // membre du serveur qui les héberge (+protect). Repli sur les emojis
+    // Unicode si l'accès venait à changer, pour ne pas laisser la photo
+    // sans réactions.
+    for (const [custom, fallback] of [[VOTE_UP_EMOJI, '✅'], [VOTE_DOWN_EMOJI, '🚫']]) {
+      const ok = await posted.react(custom).then(() => true).catch(() => false);
+      if (!ok) await posted.react(fallback).catch(() => {});
+    }
     await posted.startThread({ name: pending.authorTag.slice(0, 100), autoArchiveDuration: 1440 }).catch(() => {});
   }
 
