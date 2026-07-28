@@ -4,6 +4,7 @@ const { addTempBan } = require('../data/tempBanStore');
 const { DURATION_CHOICES, DURATION_MS, DURATION_LABEL } = require('../data/durationChoices');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -48,6 +49,6 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0xff0000)
       .setDescription(`<a:ableh:1525532035928690688> <@${targetUser.id}> a été banni pour **${DURATION_LABEL[durationKey]}**.` + (reason ? `\n**Raison :** ${reason}` : ''));
-    await interaction.reply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

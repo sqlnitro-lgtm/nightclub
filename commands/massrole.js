@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { isBlr } = require('../data/blrStore');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -18,7 +19,7 @@ module.exports = {
       return interaction.reply({ content: "Le rôle du bot n'est pas assez haut pour attribuer ce rôle.", ephemeral: true });
     }
 
-    await interaction.deferReply();
+    await interaction.deferReply({ ephemeral: true });
 
     let members;
     try {
@@ -53,6 +54,6 @@ module.exports = {
           (skippedBlr > 0 ? `\n<a:hkhi:1525582949708468374> ${skippedBlr} membre(s) ignoré(s) (BLR).` : '') +
           (failed > 0 ? `\n<:egirl:1526275509464469615> ${failed} échec(s).` : '')
       );
-    await interaction.editReply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

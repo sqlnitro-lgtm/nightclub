@@ -3,6 +3,7 @@ const { findMutedRole } = require('../data/mutedRoleHelper');
 const { clearMute, isMuted } = require('../data/muteStore');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -35,6 +36,6 @@ module.exports = {
     await logModAction(interaction.guild, { action: 'unmute', target, moderator: interaction.user, reason });
 
     const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:bnyear_black:1525582808116891798> <@${target.id}> n'est plus mute.`);
-    await interaction.reply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

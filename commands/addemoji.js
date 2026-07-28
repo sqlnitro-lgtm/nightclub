@@ -1,11 +1,12 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('addemoji')
     .setDescription('Ajoute un emoji au serveur')
-    .setContexts([InteractionContextType.Guild])
+    .setContexts([InteractionContextType.Guild])
     .addStringOption((opt) => opt.setName('nom').setDescription("Nom de l'emoji").setRequired(true).setMaxLength(32))
     .addAttachmentOption((opt) => opt.setName('image').setDescription("Image de l'emoji").setRequired(true)),
 
@@ -22,12 +23,12 @@ module.exports = {
       return interaction.reply({ content: "Le fichier fourni n'est pas une image.", ephemeral: true });
     }
 
-    await interaction.deferReply();
+    await interaction.deferReply({ ephemeral: true });
 
     try {
       const emoji = await interaction.guild.emojis.create({ attachment: image.url, name, reason: `Ajouté par ${interaction.user.tag}` });
       const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:1Kiss:1525528118352154674> Emoji ${emoji} (\`:${emoji.name}:\`) ajouté.`);
-      await interaction.editReply({ embeds: [embed] });
+      await respondPlain(interaction, { embeds: [embed] });
     } catch (err) {
       await interaction.editReply({ content: `Impossible d'ajouter cet emoji : \`${err.message}\`.` });
     }

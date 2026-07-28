@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -31,6 +32,6 @@ module.exports = {
     }
 
     const embed = new EmbedBuilder().setColor(0x5865f2).setDescription(`<a:1Kiss:1525528118352154674> <@${target.id}> déplacé vers <#${channel.id}>.`);
-    await interaction.reply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

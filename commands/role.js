@@ -2,6 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionConte
 const { isBlr } = require('../data/blrStore');
 const { canModerate } = require('../data/hierarchyHelper');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -45,6 +46,6 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0x00b050)
       .setDescription(`<a:1Kiss:1525528118352154674> Rôle <@&${role.id}> ajouté à <@${target.id}>.`);
-    await interaction.reply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

@@ -41,13 +41,13 @@ function buildHelpText(isAdmin) {
       ]),
       section('🔒', 'Salons', [
         '> **&lock** / **&unlock** — Verrouille/déverrouille le salon où la commande est tapée.',
-        '> **&lockall** / **&unlockall** — Verrouille/déverrouille tous les salons.',
-        '> **/channels create/delete/rename/hide/unhide** — Gère les salons (création, suppression, renommage, visibilité).',
+        '> **&l0all** (bascule) — Verrouille tous les salons, ou les rouvre si déjà verrouillés.',
+        '> **&channel** — Menu (boutons) pour créer/supprimer/renommer/masquer/afficher un salon.',
         '> **/slowmode** / **/slowmodeoff** — Mode lent.',
       ]),
       section('🔊', 'Vocal', [
-        '> **/voiceunmute** — Réactive le micro d\'un membre en vocal.',
-        '> **/voiceundeafen** — Retire la surdité d\'un membre en vocal.',
+        '> **&muet \\<id\\>** (bascule) — Coupe/réactive le micro d\'un membre en vocal.',
+        '> **&sourd \\<id\\>** (bascule) — Rend sourd/entendant un membre en vocal.',
         '> **/move** / **/disconnect** — Déplace/déconnecte du vocal (retire aussi la laisse /dog si active).',
         "> **=follow \\<id\\>** — Te déplace automatiquement avec un membre (relance sur la même cible pour arrêter).",
         '> **=mv \\<id\\>** — Déplace un membre dans ton salon vocal.',
@@ -61,9 +61,9 @@ function buildHelpText(isAdmin) {
         '> **+snipe [#salon]** — Dernier message supprimé du salon (celui-ci par défaut).',
       ]),
       section('⛔', 'Listes & Logs', [
-        '> **/blacklist** / **/unblacklist** — Liste noire (re-ban automatique au retour).',
+        '> **&bl \\<id\\> [raison]** / **&unbl \\<id\\> [raison]** — Liste noire (re-ban automatique au retour).',
         '> **&wl \\<id\\>** (bascule) — Liste blanche : bloque toute commande de modération sur cette personne.',
-        '> **/logs** — Configure le salon de logs de modération.',
+        '> **/logs [salon]** (bascule) — Configure le salon de logs ; relance sur le même salon pour désactiver.',
       ]),
       section('👑', 'Administration', [
         '> **=admin \\<id\\>** (bascule, ou **=addmin**) — Donne le rôle Admin, ou le retire s\'il l\'a déjà.',

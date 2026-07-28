@@ -11,6 +11,7 @@ const { getLeash, getLeashedByOwner, setLeash, removeLeash } = require('../data/
 const { setFollow, clearFollow } = require('../data/voiceFollowStore');
 const { canModerate } = require('../data/hierarchyHelper');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 // Les pseudos Discord ne peuvent pas contenir d'emoji personnalisé (<a:...:id>) —
 // seuls les caractères Unicode s'y affichent correctement, d'où un emoji dédié pour le pseudo.
@@ -46,7 +47,7 @@ module.exports = {
       removeLeash(interaction.guild.id, target.id);
 
       const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`${DOG_EMBED_EMOJI} <@${target.id}> n'est plus en laisse.`);
-      return interaction.reply({ embeds: [embed] });
+      return respondPlain(interaction, { embeds: [embed] });
     }
 
     const modCheck = canModerate(interaction.guild, interaction.member, target);
@@ -78,6 +79,6 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0x999999)
       .setDescription(`${DOG_EMBED_EMOJI} <@${target.id}> est maintenant en laisse — pseudo verrouillé, te suit automatiquement en vocal. Relance \`/dog\` sur lui pour le libérer.`);
-    await interaction.reply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

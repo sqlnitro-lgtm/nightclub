@@ -3,6 +3,7 @@ const { canModerate } = require('../data/hierarchyHelper');
 const { DURATION_CHOICES, DURATION_MS, DURATION_LABEL } = require('../data/durationChoices');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -44,6 +45,6 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0x999999)
       .setDescription(`<:DotYL:1526274787305980054> <@${target.id}> a reçu un timeout de **${DURATION_LABEL[durationKey]}**.` + (reason ? `\n**Raison :** ${reason}` : ''));
-    await interaction.reply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

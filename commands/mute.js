@@ -5,12 +5,13 @@ const { canModerate } = require('../data/hierarchyHelper');
 const { DURATION_CHOICES, DURATION_MS, DURATION_LABEL } = require('../data/durationChoices');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('mute')
     .setDescription('Mute un membre (rôle Muted, distinct du timeout natif)')
-    .setContexts([InteractionContextType.Guild])
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre à mute').setRequired(true))
     .addStringOption((opt) =>
       opt
@@ -39,7 +40,7 @@ module.exports = {
       return interaction.reply({ content: `<@${target.id}> est déjà mute.`, ephemeral: true });
     }
 
-    await interaction.deferReply();
+    await interaction.deferReply({ ephemeral: true });
 
     const role = await ensureMutedRole(interaction.guild).catch(() => null);
     if (!role) {
@@ -65,6 +66,6 @@ module.exports = {
         `<:whitestar:1525583692754321478> <@${target.id}> a été mute${durationKey ? ` pour **${DURATION_LABEL[durationKey]}**` : ' (indéfiniment)'}.` +
           (reason ? `\n**Raison :** ${reason}` : '')
       );
-    await interaction.editReply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

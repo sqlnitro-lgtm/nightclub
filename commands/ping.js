@@ -8,6 +8,7 @@
 
 const { SlashCommandBuilder, InteractionContextType } = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder().setName('ping').setDescription('Ping @everyone')
@@ -16,7 +17,7 @@ module.exports = {
   async execute(interaction) {
     if (!(await requireAdmin(interaction))) return;
 
-    await interaction.reply({
+    await respondPlain(interaction, {
       content: '<a:arrow_wh:1525532066890911826> Pong ! @everyone',
       allowedMentions: { parse: ['everyone'] },
     });

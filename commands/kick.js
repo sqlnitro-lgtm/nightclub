@@ -2,6 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionConte
 const { canModerate } = require('../data/hierarchyHelper');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -41,6 +42,6 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0xff9900)
       .setDescription(`<:argent:1525538360322687097> <@${target.id}> a été expulsé.` + (reason ? `\n**Raison :** ${reason}` : ''));
-    await interaction.reply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

@@ -3,6 +3,7 @@ const { canModerate } = require('../data/hierarchyHelper');
 const { requireAdmin } = require('../data/permissionHelper');
 const { getLeash, removeLeash } = require('../data/leashStore');
 const { clearFollow } = require('../data/voiceFollowStore');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -46,6 +47,6 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0xff6600)
       .setDescription(`<a:1Kiss:1525528118352154674> <@${target.id}> déconnecté du vocal.` + (leashCleared ? '\nSa laisse (/dog) a aussi été retirée.' : ''));
-    await interaction.reply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

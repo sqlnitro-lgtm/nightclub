@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionContextType} = require('discord.js');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -18,7 +19,7 @@ module.exports = {
       return interaction.reply({ content: "Le rôle du bot n'est pas assez haut pour retirer ce rôle.", ephemeral: true });
     }
 
-    await interaction.deferReply();
+    await interaction.deferReply({ ephemeral: true });
 
     // role.members ne reflète que le cache : un fetch complet garantit qu'on
     // ne rate personne qui n'était pas déjà en cache (gros serveurs).
@@ -39,6 +40,6 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0xff6600)
       .setDescription(`<a:1Kiss:1525528118352154674> Rôle <@&${role.id}> retiré à **${removed}** membre(s).` + (failed > 0 ? `\n<:egirl:1526275509464469615> ${failed} échec(s).` : ''));
-    await interaction.editReply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

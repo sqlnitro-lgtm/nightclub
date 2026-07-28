@@ -31,6 +31,13 @@ function getLogChannelId(guildId) {
   return loadConfig()[guildId] ?? null;
 }
 
+function clearLogChannel(guildId) {
+  const all = loadConfig();
+  if (!(guildId in all)) return;
+  delete all[guildId];
+  saveConfig(all);
+}
+
 function loadHistory() {
   if (!fs.existsSync(HISTORY_PATH)) return {};
   try {

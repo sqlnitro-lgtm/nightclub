@@ -2,6 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, InteractionConte
 const { canModerate } = require('../data/hierarchyHelper');
 const { logModAction } = require('../data/modLogHelper');
 const { requireAdmin } = require('../data/permissionHelper');
+const { respondPlain } = require('../data/respond');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -51,6 +52,6 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0xff6600)
       .setDescription(`<a:ableh:1525532035928690688> <@${target.id}> a été softban (messages purgés, peut revenir).` + (reason ? `\n**Raison :** ${reason}` : ''));
-    await interaction.reply({ embeds: [embed] });
+    await respondPlain(interaction, { embeds: [embed] });
   },
 };

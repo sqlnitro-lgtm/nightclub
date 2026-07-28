@@ -48,4 +48,20 @@ async function logModAction(guild, { action, target, moderator, reason = null, e
   await channel.send({ embeds: [embed] }).catch(() => {});
 }
 
-module.exports = { logModAction };
+/**
+ * Poste un embed brut dans le salon de logs, pour les événements qui ne
+ * concernent pas un membre précis (suppression de message, gestion de
+ * salon, actions groupées...) — pas d'entrée dans l'historique membre.
+ */
+async function logEvent(guild, { title, color = 0x5865f2, description }) {
+  const channelId = getLogChannelId(guild.id);
+  if (!channelId) return;
+
+  const channel = await guild.channels.fetch(channelId).catch(() => null);
+  if (!channel) return;
+
+  const embed = new EmbedBuilder().setColor(color).setTitle(title).setDescription(description).setTimestamp();
+  await channel.send({ embeds: [embed] }).catch(() => {});
+}
+
+module.exports = { logModAction, logEvent };
