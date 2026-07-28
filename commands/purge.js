@@ -28,7 +28,7 @@ module.exports = {
       }
 
       const deleted = await interaction.channel.bulkDelete(toDelete, true);
-      await interaction.editReply({ content: `✅ ${deleted.size} message(s) de <@${targetId}> supprimé(s).` });
+      await interaction.editReply({ content: `<a:1Kiss:1525528118352154674> ${deleted.size} message(s) de <@${targetId}> supprimé(s).` });
     } catch (err) {
       await interaction.editReply({ content: `Impossible de supprimer ces messages : \`${err.message}\`.` });
     }

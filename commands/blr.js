@@ -20,8 +20,8 @@ module.exports = {
       .setColor(nowBlr ? 0xff0000 : 0x00b050)
       .setDescription(
         nowBlr
-          ? `🔒 <@${targetId}> est maintenant **BLR** — impossible de lui attribuer un nouveau rôle tant que ce statut n'est pas retiré.`
-          : `✅ <@${targetId}> n'est plus BLR.`
+          ? `<a:hkhi:1525582949708468374> <@${targetId}> est maintenant **BLR** — impossible de lui attribuer un nouveau rôle tant que ce statut n'est pas retiré.`
+          : `<a:1Kiss:1525528118352154674> <@${targetId}> n'est plus BLR.`
       );
     await interaction.reply({ embeds: [embed] });
   },

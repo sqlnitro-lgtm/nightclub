@@ -26,7 +26,7 @@ module.exports = {
 
     try {
       const emoji = await interaction.guild.emojis.create({ attachment: image.url, name, reason: `Ajouté par ${interaction.user.tag}` });
-      const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`✅ Emoji ${emoji} (\`:${emoji.name}:\`) ajouté.`);
+      const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:1Kiss:1525528118352154674> Emoji ${emoji} (\`:${emoji.name}:\`) ajouté.`);
       await interaction.editReply({ embeds: [embed] });
     } catch (err) {
       await interaction.editReply({ content: `Impossible d'ajouter cet emoji : \`${err.message}\`.` });

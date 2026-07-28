@@ -35,7 +35,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0xff6600)
-      .setDescription(`✅ Rôle <@&${role.id}> retiré à **${removed}** membre(s).` + (failed > 0 ? `\n⚠️ ${failed} échec(s).` : ''));
+      .setDescription(`<a:1Kiss:1525528118352154674> Rôle <@&${role.id}> retiré à **${removed}** membre(s).` + (failed > 0 ? `\n<:egirl:1526275509464469615> ${failed} échec(s).` : ''));
     await interaction.editReply({ embeds: [embed] });
   },
 };

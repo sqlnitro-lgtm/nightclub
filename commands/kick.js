@@ -28,7 +28,7 @@ module.exports = {
       return interaction.reply({ content: "Le bot n'a pas la permission d'expulser ce membre.", ephemeral: true });
     }
 
-    await target.send({ content: `👢 Tu as été expulsé de **${interaction.guild.name}**.${reason ? `\nRaison : ${reason}` : ''}` }).catch(() => {});
+    await target.send({ content: `<:argent:1525538360322687097> Tu as été expulsé de **${interaction.guild.name}**.${reason ? `\nRaison : ${reason}` : ''}` }).catch(() => {});
 
     try {
       await target.kick(reason ?? undefined);
@@ -40,7 +40,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0xff9900)
-      .setDescription(`👢 <@${target.id}> a été expulsé.` + (reason ? `\n**Raison :** ${reason}` : ''));
+      .setDescription(`<:argent:1525538360322687097> <@${target.id}> a été expulsé.` + (reason ? `\n**Raison :** ${reason}` : ''));
     await interaction.reply({ embeds: [embed] });
   },
 };

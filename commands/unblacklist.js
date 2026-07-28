@@ -29,7 +29,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0x00b050)
-      .setDescription(`✅ <@${userId}> retiré de la liste noire (le débannissement du serveur, si besoin, se fait séparément avec \`/unban\`).`);
+      .setDescription(`<a:1Kiss:1525528118352154674> <@${userId}> retiré de la liste noire (le débannissement du serveur, si besoin, se fait séparément avec \`/unban\`).`);
     await interaction.reply({ embeds: [embed] });
   },
 };

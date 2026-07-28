@@ -1,6 +1,6 @@
 /**
  * blrStore.js - statut BLR ("bloqué-le-rank") par serveur : tant qu'un
- * membre est BLR, /addrole et /massrole refusent de lui attribuer un
+ * membre est BLR, /role et /massrole refusent de lui attribuer un
  * nouveau rôle (voir commands/blr.js).
  */
 const fs = require('node:fs');

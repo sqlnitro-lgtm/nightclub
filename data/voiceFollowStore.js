@@ -1,6 +1,6 @@
 /**
  * voiceFollowStore.js - suivi vocal (en mémoire) : qui suit qui, pour
- * /followuser. Perdu au redémarrage, comme un état d'exécution volatil.
+ * =follow. Perdu au redémarrage, comme un état d'exécution volatil.
  */
 const followers = new Map(); // followerId -> targetId
 

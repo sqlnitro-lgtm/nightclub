@@ -31,7 +31,7 @@ module.exports = {
 
     await logModAction(interaction.guild, { action: 'untimeout', target, moderator: interaction.user, reason });
 
-    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`✅ Timeout retiré pour <@${target.id}>.`);
+    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:1Kiss:1525528118352154674> Timeout retiré pour <@${target.id}>.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

@@ -1,6 +1,6 @@
 /**
  * permissionHelper.js - toutes les commandes de modération sont
- * réservées aux Administrateurs (rôle donné via /giveadmin, qui accorde
+ * réservées aux Administrateurs (rôle donné via =addmin, qui accorde
  * la permission Discord Administrator) — le propriétaire du bot
  * (data/ownerStore.js) contourne toujours cette vérification, même sans
  * le rôle, sur n'importe quel serveur.
@@ -12,8 +12,16 @@ const { isOwner } = require('./ownerStore');
 async function requireAdmin(interaction) {
   if (isOwner(interaction.user.id)) return true;
   if (interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return true;
-  await interaction.reply({ content: "Cette commande est réservée aux administrateurs (voir /giveadmin).", ephemeral: true });
+  await interaction.reply({ content: "Cette commande est réservée aux administrateurs (voir =addmin).", ephemeral: true });
   return false;
 }
 
-module.exports = { requireAdmin };
+/** Équivalent de requireAdmin pour les commandes préfixées (message, pas interaction). */
+async function requireAdminMessage(message) {
+  if (isOwner(message.author.id)) return true;
+  if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return true;
+  await message.reply("Cette commande est réservée aux administrateurs (voir =addmin).");
+  return false;
+}
+
+module.exports = { requireAdmin, requireAdminMessage };

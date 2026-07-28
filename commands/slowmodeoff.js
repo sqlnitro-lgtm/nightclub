@@ -21,7 +21,7 @@ module.exports = {
       return interaction.reply({ content: `Impossible de désactiver le mode lent : \`${err.message}\`.`, ephemeral: true });
     }
 
-    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`✅ Mode lent désactivé sur <#${channel.id}>.`);
+    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:1Kiss:1525528118352154674> Mode lent désactivé sur <#${channel.id}>.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

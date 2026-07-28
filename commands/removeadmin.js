@@ -29,7 +29,7 @@ module.exports = {
       return interaction.reply({ content: `Impossible de retirer le rôle Admin : \`${err.message}\`.`, ephemeral: true });
     }
 
-    const embed = new EmbedBuilder().setColor(0xff6600).setDescription(`✅ Rôle Admin retiré à <@${target.id}>.`);
+    const embed = new EmbedBuilder().setColor(0xff6600).setDescription(`<a:1Kiss:1525528118352154674> Rôle Admin retiré à <@${target.id}>.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

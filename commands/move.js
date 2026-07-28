@@ -30,7 +30,7 @@ module.exports = {
       return interaction.reply({ content: `Impossible de déplacer ce membre : \`${err.message}\`.`, ephemeral: true });
     }
 
-    const embed = new EmbedBuilder().setColor(0x5865f2).setDescription(`✅ <@${target.id}> déplacé vers <#${channel.id}>.`);
+    const embed = new EmbedBuilder().setColor(0x5865f2).setDescription(`<a:1Kiss:1525528118352154674> <@${target.id}> déplacé vers <#${channel.id}>.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

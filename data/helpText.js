@@ -2,7 +2,7 @@
  * helpText.js
  * ------------------------------------------------------------------
  * Génère le texte de /help. Toutes les commandes de modération sont
- * réservées aux Administrateurs (voir /giveadmin et data/permissionHelper.js) :
+ * réservées aux Administrateurs (voir =addmin et data/permissionHelper.js) :
  * un seul indicateur `isAdmin` (propriétaire du bot ou permission
  * Administrator) décide si les sections de modération s'affichent.
  * ------------------------------------------------------------------
@@ -16,7 +16,6 @@ function section(emoji, title, lines) {
 function buildHelpText(isAdmin) {
   const sections = [
     section('🌐', 'Public', [
-      '> **/ping** — Vérifie que le bot répond.',
       '> **/help** — Cette liste.',
       '> **=find** — Recherche un membre par pseudo, nom ou ID.',
     ]),
@@ -25,31 +24,32 @@ function buildHelpText(isAdmin) {
   if (isAdmin) {
     sections.push(
       section('🎭', 'Rôles', [
-        "> **/addrole** / **/removerole** — Ajoute/retire un rôle à un membre.",
+        "> **/role** / **/delrole** — Ajoute/retire un rôle à un membre.",
         "> **/blr** — Bascule le statut BLR (bloque l'attribution de rôle).",
         '> **/massrole** / **/massunrole** — Ajoute/retire un rôle à tous les membres.',
       ]),
       section('🔨', 'Sanctions', [
         '> **/mute** / **/unmute** — Mute manuel (rôle Muted), durée fixe ou indéfini.',
         '> **/timeout** / **/untimeout** — Timeout natif Discord.',
-        "> **/warn** / **/unwarn** / **/resetwarnings** — Avertissements.",
-        "> **/modlogs** — Historique de modération d'un membre.",
+        "> **&warn \\<id\\> \\<raison\\>** / **&unwarn \\<id\\> [numéro]** / **/resetwarnings** — Avertissements.",
         '> **/kick** — Expulse un membre.',
-        '> **/ban** / **/unban** / **/tempban** / **/softban** — Bannissements (définitif, temporaire, ou softban).',
+        '> **+ban \\<id\\> [raison]** / **/unban** / **/tempban** / **/softban** — Bannissements (définitif, temporaire, ou softban).',
       ]),
-      section('🐕', 'Fun', ['> **/dog** — Met un membre en laisse (pseudo verrouillé, te suit en vocal), ou le libère.']),
+      section('🐕', 'Fun', [
+        '> **/dog** — Met un membre en laisse (pseudo verrouillé, te suit en vocal), ou le libère.',
+        '> **/ping** — Ping @everyone.',
+      ]),
       section('🔒', 'Salons', [
-        '> **/lock** / **/unlock** — Verrouille/déverrouille un salon.',
-        '> **/lockall** / **/unlockall** — Verrouille/déverrouille tous les salons.',
-        '> **/hidechannel** / **/unhidechannel** — Masque/affiche un salon.',
-        '> **/createchannel** / **/deletechannel** / **/renamechannel** — Gère les salons.',
+        '> **&lock** / **&unlock** — Verrouille/déverrouille le salon où la commande est tapée.',
+        '> **&lockall** / **&unlockall** — Verrouille/déverrouille tous les salons.',
+        '> **/channels create/delete/rename/hide/unhide** — Gère les salons (création, suppression, renommage, visibilité).',
         '> **/slowmode** / **/slowmodeoff** — Mode lent.',
       ]),
       section('🔊', 'Vocal', [
-        '> **/voicemute** / **/voiceunmute** — Coupe/réactive le micro en vocal.',
-        '> **/voicedeafen** / **/voiceundeafen** — Rend sourd/entendant en vocal.',
-        '> **/move** / **/disconnect** — Déplace/déconnecte du vocal.',
-        "> **/followuser** — Te déplace automatiquement avec un membre (bascule).",
+        '> **/voiceunmute** — Réactive le micro d\'un membre en vocal.',
+        '> **/voiceundeafen** — Retire la surdité d\'un membre en vocal.',
+        '> **/move** / **/disconnect** — Déplace/déconnecte du vocal (retire aussi la laisse /dog si active).',
+        "> **=follow \\<id\\>** — Te déplace automatiquement avec un membre (relance sur la même cible pour arrêter).",
         '> **=mv \\<id\\>** — Déplace un membre dans ton salon vocal.',
         '> **=pv** — Bascule ton salon vocal courant privé/public.',
       ]),
@@ -58,14 +58,18 @@ function buildHelpText(isAdmin) {
       section('🧹', 'Messages', [
         '> **/clear** — Supprime les derniers messages du salon.',
         "> **/purge** — Supprime les messages d'un membre précis.",
-        '> **/snipe** / **/editsnipe** — Dernier message supprimé/édité du salon.',
+        '> **/snipe** — Dernier message supprimé du salon.',
       ]),
       section('⛔', 'Listes & Logs', [
         '> **/blacklist** / **/unblacklist** — Liste noire (re-ban automatique au retour).',
-        '> **/whitelist** / **/unwhitelist** — Liste blanche (protège du blacklist).',
+        '> **&wl \\<id\\>** (bascule) — Liste blanche : bloque toute commande de modération sur cette personne.',
         '> **/logs** — Configure le salon de logs de modération.',
       ]),
-      section('👑', 'Administration', ['> **/giveadmin** / **/removeadmin** — Donne/retire le rôle Admin.'])
+      section('👑', 'Administration', [
+        '> **=addmin \\<id\\>** — Donne le rôle Admin (sans id : liste les admins).',
+        '> **=admin** — Liste tous les membres ayant le rôle Admin.',
+        '> **/removeadmin** — Retire le rôle Admin.',
+      ])
     );
   }
 

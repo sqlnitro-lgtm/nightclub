@@ -3,9 +3,9 @@
  * ------------------------------------------------------------------
  * Point d'entrée du bot Discord.
  * - Charge dynamiquement toutes les commandes du dossier /commands.
- * - Gère aussi les commandes préfixées =mv, =pv, =find, le snipe
- *   (messages supprimés/édités), la liste noire (re-ban automatique),
- *   le suivi vocal (/followuser) et l'expiration des mutes/tempbans.
+ * - Gère aussi les commandes préfixées =mv, =pv, =find, =follow, =addmin,
+ *   =admin, &warn, &unwarn, &wl, le snipe (messages supprimés/édités), la
+ *   liste noire (re-ban automatique) et l'expiration des mutes/tempbans.
  * ------------------------------------------------------------------
  */
 
@@ -15,21 +15,33 @@ const path = require('node:path');
 const { Client, Collection, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 const { isBlacklisted } = require('./data/blacklistStore');
-const { recordDeleted, recordEdited } = require('./data/snipeStore');
-const { getFollowTarget, getFollowersOf } = require('./data/voiceFollowStore');
+const { addToWhitelist, removeFromWhitelist, isWhitelisted } = require('./data/accessListStore');
+const { recordDeleted } = require('./data/snipeStore');
+const { getFollowTarget, getFollowersOf, setFollow, clearFollow } = require('./data/voiceFollowStore');
 const { getAllMutes, clearMute } = require('./data/muteStore');
 const { getAllTempBans, removeTempBan } = require('./data/tempBanStore');
 const { findMutedRole } = require('./data/mutedRoleHelper');
 const { logModAction } = require('./data/modLogHelper');
 const { getLeash } = require('./data/leashStore');
-const { isOwner, toggleDynamicAdmin } = require('./data/ownerStore');
-const { tryRunAsPrefix } = require('./data/prefixBridge');
+const { canModerate } = require('./data/hierarchyHelper');
+const { addWarn, getWarns, removeWarn } = require('./data/warnStore');
+const { requireAdminMessage } = require('./data/permissionHelper');
 
 const MV_PREFIX = '=mv';
 const PV_PREFIX = '=pv';
 const FIND_PREFIX = '=find';
-const ADMIN_PREFIX = '&admin';
-const SLASH_PREFIX = '&'; // toutes les commandes slash sont aussi utilisables en "&nom arguments..."
+const ADDMIN_PREFIX = '=addmin';
+const ADMIN_PREFIX = '=admin';
+const FOLLOW_PREFIX = '=follow';
+const WARN_PREFIX = '&warn';
+const UNWARN_PREFIX = '&unwarn';
+const WL_PREFIX = '&wl';
+const LOCK_PREFIX = '&lock';
+const UNLOCK_PREFIX = '&unlock';
+const LOCKALL_PREFIX = '&lockall';
+const UNLOCKALL_PREFIX = '&unlockall';
+const BAN_PREFIX = '+ban';
+const ADMIN_ROLE_NAME = 'Admin';
 const CHECK_INTERVAL_MS = 60 * 1000; // vérifie les mutes/tempbans expirés toutes les minutes
 
 const client = new Client({
@@ -123,8 +135,8 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 });
 
 // --------------------------------------------------------------------
-// Snipe : mémorise le dernier message supprimé/édité de chaque salon
-// (voir /snipe, /editsnipe). Ignore les messages de bots.
+// Snipe : mémorise le dernier message supprimé de chaque salon (voir
+// /snipe). Ignore les messages de bots.
 // --------------------------------------------------------------------
 client.on('messageDelete', (message) => {
   if (!message.guild || message.author?.bot) return;
@@ -136,19 +148,8 @@ client.on('messageDelete', (message) => {
   });
 });
 
-client.on('messageUpdate', (oldMessage, newMessage) => {
-  if (!newMessage.guild || newMessage.author?.bot) return;
-  if (oldMessage.content === newMessage.content) return; // évite le bruit des aperçus de lien
-  recordEdited(newMessage.channel.id, {
-    before: oldMessage.content,
-    after: newMessage.content,
-    authorTag: newMessage.author?.tag ?? 'Inconnu',
-    authorAvatarURL: newMessage.author?.displayAvatarURL?.() ?? null,
-  });
-});
-
 // --------------------------------------------------------------------
-// Suivi vocal (/followuser) : déplace chaque follower quand la personne
+// Suivi vocal (=follow) : déplace chaque follower quand la personne
 // suivie change de salon vocal.
 // --------------------------------------------------------------------
 client.on('voiceStateUpdate', async (oldState, newState) => {
@@ -158,7 +159,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   for (const followerId of followers) {
     const followerMember = await newState.guild.members.fetch(followerId).catch(() => null);
     if (!followerMember?.voice.channel) continue; // ne pas convoquer quelqu'un qui n'est pas déjà en vocal
-    await followerMember.voice.setChannel(newState.channel, 'Suivi automatique (/followuser)').catch(() => {});
+    await followerMember.voice.setChannel(newState.channel, 'Suivi automatique (=follow)').catch(() => {});
   }
 });
 
@@ -185,50 +186,58 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // Toute commande slash est aussi utilisable en "&nom arguments..." (voir
-  // data/prefixBridge.js) — &lock, &kick, &ban, etc. réutilisent directement
-  // la même logique que leur équivalent slash, y compris &help.
-  if (lower.startsWith(SLASH_PREFIX)) {
-    const [cmdName, ...rest] = content.slice(SLASH_PREFIX.length).trim().split(/\s+/);
-    const command = client.commands.get(cmdName?.toLowerCase());
-    if (command) {
-      await tryRunAsPrefix(command, message, rest.join(' ')).catch((err) => console.error(`[prefix:${cmdName}] Erreur :`, err.message));
-    }
+  // Commandes ci-dessous : token exact (évite que "&lock" matche "&lockall").
+  const firstSpace = content.indexOf(' ');
+  const cmdToken = (firstSpace === -1 ? content : content.slice(0, firstSpace)).toLowerCase();
+  const restArgs = firstSpace === -1 ? '' : content.slice(firstSpace + 1).trim();
+
+  switch (cmdToken) {
+    case ADDMIN_PREFIX:
+      await handleAddmin(message, restArgs).catch((err) => console.error('[addmin] Erreur :', err.message));
+      return;
+    case ADMIN_PREFIX:
+      await handleAdminList(message).catch((err) => console.error('[admin] Erreur :', err.message));
+      return;
+    case FOLLOW_PREFIX:
+      await handleFollow(message, restArgs).catch((err) => console.error('[follow] Erreur :', err.message));
+      return;
+    case WARN_PREFIX:
+      await handleWarn(message, restArgs).catch((err) => console.error('[warn] Erreur :', err.message));
+      return;
+    case UNWARN_PREFIX:
+      await handleUnwarn(message, restArgs).catch((err) => console.error('[unwarn] Erreur :', err.message));
+      return;
+    case WL_PREFIX:
+      await handleWl(message, restArgs).catch((err) => console.error('[wl] Erreur :', err.message));
+      return;
+    case LOCKALL_PREFIX:
+      await handleLockAll(message, true).catch((err) => console.error('[lockall] Erreur :', err.message));
+      return;
+    case UNLOCKALL_PREFIX:
+      await handleLockAll(message, false).catch((err) => console.error('[unlockall] Erreur :', err.message));
+      return;
+    case LOCK_PREFIX:
+      await handleLock(message, true).catch((err) => console.error('[lock] Erreur :', err.message));
+      return;
+    case UNLOCK_PREFIX:
+      await handleLock(message, false).catch((err) => console.error('[unlock] Erreur :', err.message));
+      return;
+    case BAN_PREFIX:
+      await handleBan(message, restArgs).catch((err) => console.error('[ban] Erreur :', err.message));
+      return;
   }
-});
-
-// --------------------------------------------------------------------
-// &admin <id> : bascule un accès total (contourne toute permission,
-// comme le propriétaire) pour cet ID. Réservé aux OWNER_IDS en dur.
-// Fonctionne en MP comme en serveur (gestion globale du bot).
-// --------------------------------------------------------------------
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
-  if (!message.content.toLowerCase().startsWith(ADMIN_PREFIX)) return;
-
-  if (!isOwner(message.author.id)) {
-    console.warn(`[admin] Accès refusé : ${message.author.tag} (${message.author.id}).`);
-    return;
-  }
-
-  const id = message.content.slice(ADMIN_PREFIX.length).trim();
-  if (!/^\d{17,20}$/.test(id)) {
-    await message.reply('Usage : `&admin <id>` (ajoute ou retire un accès total selon le statut actuel).');
-    return;
-  }
-
-  const added = toggleDynamicAdmin(id);
-  console.log(`[admin] ${message.author.tag} a ${added ? 'ajouté' : 'retiré'} l'accès total de ${id}.`);
-  await message.reply(
-    added
-      ? `✅ <@${id}> a désormais un accès total au bot (contourne toute vérification, comme un propriétaire).`
-      : `✅ <@${id}> n'a plus d'accès total.`
-  );
 });
 
 function extractId(raw) {
   const match = raw.match(/\d{17,20}/);
   return match ? match[0] : null;
+}
+
+/** Extrait l'ID/mention en tête de chaîne et retourne { id, rest } (rest = texte libre après, ex. une raison). */
+function extractLeadingTarget(raw) {
+  const match = raw.match(/^\s*(?:<@!?(\d{17,20})>|(\d{17,20}))\s*/);
+  if (!match) return null;
+  return { id: match[1] || match[2], rest: raw.slice(match[0].length).trim() };
 }
 
 /** =mv <id|@membre> : donne l'accès au salon vocal courant et y déplace la cible si elle est déjà en vocal ailleurs. */
@@ -261,7 +270,7 @@ async function handleMv(message, rawTarget) {
     if (target.voice.channel) {
       await target.voice.setChannel(voiceChannel, `Déplacé par ${message.author.tag}`);
     }
-    await message.reply(`✅ <@${target.id}> peut maintenant rejoindre **${voiceChannel.name}**${target.voice.channel ? ' et y a été déplacé' : ''}.`);
+    await message.reply(`<a:1Kiss:1525528118352154674> <@${target.id}> peut maintenant rejoindre **${voiceChannel.name}**${target.voice.channel ? ' et y a été déplacé' : ''}.`);
   } catch (err) {
     await message.reply(`Impossible de déplacer ce membre : \`${err.message}\`.`);
   }
@@ -288,7 +297,7 @@ async function handlePv(message) {
     if (!isPv) {
       await voiceChannel.permissionOverwrites.edit(message.author.id, { Connect: true, ViewChannel: true });
     }
-    await message.reply(`✅ Salon **${voiceChannel.name}** rendu **${isPv ? 'public' : 'privé'}**.`);
+    await message.reply(`<a:1Kiss:1525528118352154674> Salon **${voiceChannel.name}** rendu **${isPv ? 'public' : 'privé'}**.`);
   } catch (err) {
     await message.reply(`Impossible de modifier ce salon : \`${err.message}\`.`);
   }
@@ -330,6 +339,231 @@ async function handleFind(message, query) {
     .setDescription(lines.join('\n'))
     .setFooter({ text: `${results.size} résultat(s)${results.size > 10 ? ' — 10 premiers affichés' : ''}` });
 
+  await message.reply({ embeds: [embed] });
+}
+
+/** =follow <id> : bascule le suivi vocal automatique (relance sur la même cible pour arrêter). */
+async function handleFollow(message, rawTarget) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const targetId = extractId(rawTarget);
+  if (!targetId) {
+    await message.reply(`Usage : \`${FOLLOW_PREFIX} <id ou @membre>\`.`);
+    return;
+  }
+  if (targetId === message.author.id) {
+    await message.reply('Tu ne peux pas te suivre toi-même.');
+    return;
+  }
+
+  const current = getFollowTarget(message.author.id);
+  if (current === targetId) {
+    clearFollow(message.author.id);
+    await message.reply(`<a:1Kiss:1525528118352154674> Tu ne suis plus <@${targetId}>.`);
+    return;
+  }
+
+  setFollow(message.author.id, targetId);
+  await message.reply(`<a:bnyear_blue:1525583000031461436> Tu suis maintenant <@${targetId}> en vocal — relance \`${FOLLOW_PREFIX} ${targetId}\` pour arrêter.`);
+}
+
+/** &warn <id> <raison> : avertit un membre. */
+async function handleWarn(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const parsed = extractLeadingTarget(rawArgs);
+  const targetId = parsed?.id;
+  const reason = parsed?.rest ?? '';
+  if (!targetId || !reason) {
+    await message.reply(`Usage : \`${WARN_PREFIX} <id ou @membre> <raison>\`.`);
+    return;
+  }
+
+  const target = await message.guild.members.fetch(targetId).catch(() => null);
+  if (!target) {
+    await message.reply('Ce membre est introuvable sur ce serveur.');
+    return;
+  }
+
+  const modCheck = canModerate(message.guild, message.member, target);
+  if (!modCheck.ok) return message.reply(modCheck.reason);
+
+  const total = addWarn(message.guild.id, target.id, reason, message.author.id);
+  await logModAction(message.guild, { action: 'warn', target, moderator: message.author, reason, extra: `Total d'avertissements : **${total}**` }).catch(() => {});
+  await target.send({ content: `<:egirl:1526275509464469615> Tu as reçu un avertissement sur **${message.guild.name}** : ${reason}` }).catch(() => {});
+
+  await message.reply(`<:egirl:1526275509464469615> <@${target.id}> a été averti.\n**Raison :** ${reason}\n**Total d'avertissements :** ${total}`);
+}
+
+/** &unwarn <id> [numéro] : retire le dernier avertissement, ou un numéro précis (voir &warn). */
+async function handleUnwarn(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const parsed = extractLeadingTarget(rawArgs);
+  const targetId = parsed?.id;
+  if (!targetId) {
+    await message.reply(`Usage : \`${UNWARN_PREFIX} <id ou @membre> [numéro]\`.`);
+    return;
+  }
+
+  const rest = parsed.rest;
+  const numero = rest ? parseInt(rest, 10) : null;
+  if (rest && (Number.isNaN(numero) || numero < 1)) {
+    await message.reply(`Usage : \`${UNWARN_PREFIX} <id ou @membre> [numéro]\`.`);
+    return;
+  }
+
+  const existing = getWarns(message.guild.id, targetId);
+  if (existing.length === 0) {
+    await message.reply(`<@${targetId}> n'a aucun avertissement.`);
+    return;
+  }
+
+  const remaining = removeWarn(message.guild.id, targetId, numero ? numero - 1 : null);
+  if (remaining === null) {
+    await message.reply(`Avertissement n°${numero} introuvable (${existing.length} au total).`);
+    return;
+  }
+
+  await logModAction(message.guild, { action: 'unwarn', target: { id: targetId }, moderator: message.author, extra: `Avertissements restants : **${remaining}**` }).catch(() => {});
+  await message.reply(`<a:1Kiss:1525528118352154674> Avertissement retiré pour <@${targetId}> — il en reste **${remaining}**.`);
+}
+
+/** &wl <id> : bascule la liste blanche (protège des commandes de modération sur cette personne). */
+async function handleWl(message, rawTarget) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const targetId = extractId(rawTarget);
+  if (!targetId) {
+    await message.reply(`Usage : \`${WL_PREFIX} <id ou @membre>\`.`);
+    return;
+  }
+
+  if (isWhitelisted(message.guild.id, targetId)) {
+    removeFromWhitelist(message.guild.id, targetId);
+    await message.reply(`<a:1Kiss:1525528118352154674> <@${targetId}> retiré de la liste blanche.`);
+    return;
+  }
+
+  addToWhitelist(message.guild.id, targetId);
+  await message.reply(`<a:1Kiss:1525528118352154674> <@${targetId}> ajouté à la liste blanche (protégé des commandes de modération).`);
+}
+
+/** &lock / &unlock : verrouille/déverrouille le salon où la commande est tapée. */
+async function handleLock(message, lock) {
+  if (!(await requireAdminMessage(message))) return;
+
+  try {
+    await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: lock ? false : null });
+    await message.reply(lock ? `<a:hkhi:1525582949708468374> <#${message.channel.id}> est maintenant verrouillé.` : `<:ethereum:1526711837465378826> <#${message.channel.id}> est maintenant déverrouillé.`);
+  } catch (err) {
+    await message.reply(`Impossible de modifier ce salon : \`${err.message}\`.`);
+  }
+}
+
+/** &lockall / &unlockall : verrouille/déverrouille tous les salons texte du serveur. */
+async function handleLockAll(message, lock) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const textChannels = message.guild.channels.cache.filter((c) => c.type === 0); // GuildText
+  let count = 0;
+  for (const channel of textChannels.values()) {
+    const ok = await channel.permissionOverwrites.edit(message.guild.id, { SendMessages: lock ? false : null }).then(() => true).catch(() => false);
+    if (ok) count++;
+  }
+
+  await message.reply(lock ? `<a:hkhi:1525582949708468374> ${count}/${textChannels.size} salon(s) verrouillé(s).` : `<:ethereum:1526711837465378826> ${count}/${textChannels.size} salon(s) déverrouillé(s).`);
+}
+
+/** +ban <id> <raison> : bannit un membre du serveur. */
+async function handleBan(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const parsed = extractLeadingTarget(rawArgs);
+  const targetId = parsed?.id;
+  if (!targetId) {
+    await message.reply(`Usage : \`${BAN_PREFIX} <id ou @membre> [raison]\`.`);
+    return;
+  }
+  const reason = parsed.rest || null;
+
+  const target = await message.guild.members.fetch(targetId).catch(() => null);
+  if (target) {
+    const modCheck = canModerate(message.guild, message.member, target);
+    if (!modCheck.ok) return message.reply(modCheck.reason);
+    if (!target.bannable) return message.reply("Le bot n'a pas la permission de bannir ce membre.");
+    await target.send({ content: `<a:ableh:1525532035928690688> Tu as été banni de **${message.guild.name}**.${reason ? `\nRaison : ${reason}` : ''}` }).catch(() => {});
+  }
+
+  try {
+    await message.guild.members.ban(targetId, { reason: reason ?? undefined });
+  } catch (err) {
+    await message.reply(`Impossible de bannir ce membre : \`${err.message}\`.`);
+    return;
+  }
+
+  await logModAction(message.guild, { action: 'ban', target: { id: targetId }, moderator: message.author, reason }).catch(() => {});
+  await message.reply(`<a:ableh:1525532035928690688> <@${targetId}> a été banni.` + (reason ? `\n**Raison :** ${reason}` : ''));
+}
+
+/** =addmin <id> : donne le rôle Admin. Sans id : affiche la liste des admins (comme =admin). */
+async function handleAddmin(message, rawTarget) {
+  if (!(await requireAdminMessage(message))) return;
+  if (!rawTarget) return handleAdminList(message);
+
+  const targetId = extractId(rawTarget);
+  if (!targetId) {
+    await message.reply(`Usage : \`${ADDMIN_PREFIX} <id ou @membre>\` (sans id : liste des admins).`);
+    return;
+  }
+
+  const target = await message.guild.members.fetch(targetId).catch(() => null);
+  if (!target) {
+    await message.reply('Ce membre est introuvable sur ce serveur.');
+    return;
+  }
+
+  let role = message.guild.roles.cache.find((r) => r.name === ADMIN_ROLE_NAME);
+  if (!role) {
+    if (message.guild.members.me.roles.highest.position <= 0) {
+      await message.reply("Le bot n'a pas de rôle assez haut pour créer le rôle Admin.");
+      return;
+    }
+    role = await message.guild.roles.create({
+      name: ADMIN_ROLE_NAME,
+      permissions: [PermissionFlagsBits.Administrator],
+      reason: `Rôle Admin créé automatiquement par ${message.author.tag}`,
+    });
+  }
+
+  if (target.roles.cache.has(role.id)) {
+    await message.reply(`<@${target.id}> a déjà le rôle Admin.`);
+    return;
+  }
+
+  try {
+    await target.roles.add(role, `Admin donné par ${message.author.tag}`);
+    await message.reply(`<a:1Kiss:1525528118352154674> <@${target.id}> a maintenant le rôle Admin.`);
+  } catch (err) {
+    await message.reply(`Impossible de donner le rôle Admin : \`${err.message}\`.`);
+  }
+}
+
+/** =admin : liste tous les membres ayant le rôle Admin. */
+async function handleAdminList(message) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const role = message.guild.roles.cache.find((r) => r.name === ADMIN_ROLE_NAME);
+  if (!role || role.members.size === 0) {
+    await message.reply('Aucun membre n\'a le rôle Admin pour le moment.');
+    return;
+  }
+
+  const lines = [...role.members.values()].map((m) => `**${m.user.tag}** (\`${m.id}\`)`);
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('Membres avec le rôle Admin')
+    .setDescription(lines.join('\n'));
   await message.reply({ embeds: [embed] });
 }
 

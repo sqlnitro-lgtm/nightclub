@@ -31,7 +31,7 @@ module.exports = {
       return interaction.reply({ content: `Impossible de changer ce pseudo : \`${err.message}\`.`, ephemeral: true });
     }
 
-    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`✅ Pseudo de <@${target.id}> changé en **${nickname}**.`);
+    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:1Kiss:1525528118352154674> Pseudo de <@${target.id}> changé en **${nickname}**.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

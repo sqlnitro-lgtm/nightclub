@@ -11,7 +11,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle('🍸 Commandes du serveur')
+      .setTitle('<a:noeudbleu:1526275226613317693> Commandes du serveur')
       .setDescription(buildHelpText(isAdmin));
 
     await interaction.reply({ embeds: [embed], ephemeral: true });

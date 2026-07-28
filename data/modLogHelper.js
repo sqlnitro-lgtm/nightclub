@@ -1,6 +1,6 @@
 /**
  * modLogHelper.js - poste un embed dans le salon de logs configuré (/logs)
- * et enregistre l'action dans l'historique du membre (/modlogs), en un seul
+ * et enregistre l'action dans l'historique du membre, en un seul
  * appel partagé par toutes les commandes de modération.
  */
 const { EmbedBuilder } = require('discord.js');

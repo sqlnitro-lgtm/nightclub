@@ -43,7 +43,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0x999999)
-      .setDescription(`⏱️ <@${target.id}> a reçu un timeout de **${DURATION_LABEL[durationKey]}**.` + (reason ? `\n**Raison :** ${reason}` : ''));
+      .setDescription(`<:DotYL:1526274787305980054> <@${target.id}> a reçu un timeout de **${DURATION_LABEL[durationKey]}**.` + (reason ? `\n**Raison :** ${reason}` : ''));
     await interaction.reply({ embeds: [embed] });
   },
 };

@@ -1,9 +1,11 @@
 /**
  * hierarchyHelper.js - vérifications de hiérarchie de rôles partagées par
  * toutes les commandes de modération : on ne peut jamais agir sur quelqu'un
- * de rang égal/supérieur, ni sur le propriétaire du serveur, ni si le bot
- * lui-même n'a pas un rôle assez haut pour appliquer l'action.
+ * de rang égal/supérieur, ni sur le propriétaire du serveur, ni sur un membre
+ * whitelisté (&wl), ni si le bot lui-même n'a pas un rôle assez haut pour
+ * appliquer l'action.
  */
+const { isWhitelisted } = require('./accessListStore');
 
 /** Le membre exécutant peut-il agir sur `target` ? Retourne { ok, reason }. */
 function canModerate(guild, executorMember, targetMember) {
@@ -12,6 +14,9 @@ function canModerate(guild, executorMember, targetMember) {
   }
   if (targetMember.id === executorMember.id) {
     return { ok: false, reason: 'Tu ne peux pas utiliser cette commande sur toi-même.' };
+  }
+  if (isWhitelisted(guild.id, targetMember.id)) {
+    return { ok: false, reason: "Cette personne est sur la liste blanche — les commandes de modération n'ont pas d'effet sur elle (voir &wl)." };
   }
   if (guild.ownerId !== executorMember.id && executorMember.roles.highest.position <= targetMember.roles.highest.position) {
     return { ok: false, reason: 'Cette personne a un rôle égal ou supérieur au tien.' };

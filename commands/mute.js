@@ -62,7 +62,7 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0x999999)
       .setDescription(
-        `🔇 <@${target.id}> a été mute${durationKey ? ` pour **${DURATION_LABEL[durationKey]}**` : ' (indéfiniment)'}.` +
+        `<:whitestar:1525583692754321478> <@${target.id}> a été mute${durationKey ? ` pour **${DURATION_LABEL[durationKey]}**` : ' (indéfiniment)'}.` +
           (reason ? `\n**Raison :** ${reason}` : '')
       );
     await interaction.editReply({ embeds: [embed] });

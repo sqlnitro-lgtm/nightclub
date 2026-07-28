@@ -23,7 +23,7 @@ module.exports = {
     resetWarns(interaction.guild.id, targetId);
     await logModAction(interaction.guild, { action: 'resetwarnings', target: { id: targetId }, moderator: interaction.user, extra: `${existing.length} avertissement(s) effacé(s)` });
 
-    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`✅ ${existing.length} avertissement(s) effacé(s) pour <@${targetId}>.`);
+    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:1Kiss:1525528118352154674> ${existing.length} avertissement(s) effacé(s) pour <@${targetId}>.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

@@ -26,7 +26,7 @@ module.exports = {
       return interaction.reply({ content: `Impossible de retirer la surdité : \`${err.message}\`.`, ephemeral: true });
     }
 
-    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`🔊 <@${target.id}> n'est plus sourd en vocal.`);
+    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:bnyear_black:1525582808116891798> <@${target.id}> n'est plus sourd en vocal.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

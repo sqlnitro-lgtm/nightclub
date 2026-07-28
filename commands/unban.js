@@ -33,7 +33,7 @@ module.exports = {
 
     await logModAction(interaction.guild, { action: 'unban', target: { id: userId }, moderator: interaction.user, reason });
 
-    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`✅ <@${userId}> a été débanni.` + (reason ? `\n**Raison :** ${reason}` : ''));
+    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:1Kiss:1525528118352154674> <@${userId}> a été débanni.` + (reason ? `\n**Raison :** ${reason}` : ''));
     await interaction.reply({ embeds: [embed] });
   },
 };

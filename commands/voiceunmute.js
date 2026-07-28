@@ -26,7 +26,7 @@ module.exports = {
       return interaction.reply({ content: `Impossible de réactiver le micro : \`${err.message}\`.`, ephemeral: true });
     }
 
-    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`🔊 Micro de <@${target.id}> réactivé en vocal.`);
+    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:bnyear_black:1525582808116891798> Micro de <@${target.id}> réactivé en vocal.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

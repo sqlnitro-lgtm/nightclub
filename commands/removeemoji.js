@@ -24,7 +24,7 @@ module.exports = {
       return interaction.reply({ content: `Impossible de retirer cet emoji : \`${err.message}\`.`, ephemeral: true });
     }
 
-    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`✅ Emoji \`:${rawName}:\` retiré.`);
+    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:1Kiss:1525528118352154674> Emoji \`:${rawName}:\` retiré.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

@@ -1,6 +1,7 @@
 /**
  * accessListStore.js - liste blanche par serveur (protection contre le
- * blacklist automatique, membres de confiance) : voir /whitelist, /unwhitelist.
+ * blacklist automatique, membres de confiance, immunité aux commandes de
+ * modération) : voir &wl (data/hierarchyHelper.js, commands/blacklist.js).
  */
 const fs = require('node:fs');
 const path = require('node:path');

@@ -25,7 +25,7 @@ module.exports = {
       return interaction.reply({ content: `Impossible d'activer le mode lent : \`${err.message}\`.`, ephemeral: true });
     }
 
-    const embed = new EmbedBuilder().setColor(0x5865f2).setDescription(`🐢 Mode lent activé sur <#${channel.id}> (**${seconds}s**).`);
+    const embed = new EmbedBuilder().setColor(0x5865f2).setDescription(`<a:ange:1526274914724745317> Mode lent activé sur <#${channel.id}> (**${seconds}s**).`);
     await interaction.reply({ embeds: [embed] });
   },
 };

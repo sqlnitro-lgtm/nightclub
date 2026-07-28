@@ -32,7 +32,7 @@ module.exports = {
         return interaction.reply({ content: "Le bot n'a pas la permission de bannir ce membre.", ephemeral: true });
       }
 
-      await target.send({ content: `🔨 Tu as été banni temporairement de **${interaction.guild.name}** (${DURATION_LABEL[durationKey]}).${reason ? `\nRaison : ${reason}` : ''}` }).catch(() => {});
+      await target.send({ content: `<a:ableh:1525532035928690688> Tu as été banni temporairement de **${interaction.guild.name}** (${DURATION_LABEL[durationKey]}).${reason ? `\nRaison : ${reason}` : ''}` }).catch(() => {});
     }
 
     try {
@@ -47,7 +47,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0xff0000)
-      .setDescription(`🔨 <@${targetUser.id}> a été banni pour **${DURATION_LABEL[durationKey]}**.` + (reason ? `\n**Raison :** ${reason}` : ''));
+      .setDescription(`<a:ableh:1525532035928690688> <@${targetUser.id}> a été banni pour **${DURATION_LABEL[durationKey]}**.` + (reason ? `\n**Raison :** ${reason}` : ''));
     await interaction.reply({ embeds: [embed] });
   },
 };

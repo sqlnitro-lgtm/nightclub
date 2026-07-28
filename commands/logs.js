@@ -25,7 +25,7 @@ module.exports = {
     }
 
     setLogChannel(interaction.guild.id, channel.id);
-    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`✅ Salon de logs défini sur <#${channel.id}>.`);
+    const embed = new EmbedBuilder().setColor(0x00b050).setDescription(`<a:1Kiss:1525528118352154674> Salon de logs défini sur <#${channel.id}>.`);
     await interaction.reply({ embeds: [embed] });
   },
 };

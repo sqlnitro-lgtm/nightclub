@@ -21,7 +21,7 @@ module.exports = {
       // bulkDelete ignore automatiquement les messages de plus de 14 jours ;
       // { filterOld: true } évite une erreur si certains en font partie.
       const deleted = await interaction.channel.bulkDelete(count, true);
-      await interaction.editReply({ content: `✅ ${deleted.size} message(s) supprimé(s).` });
+      await interaction.editReply({ content: `<a:1Kiss:1525528118352154674> ${deleted.size} message(s) supprimé(s).` });
     } catch (err) {
       await interaction.editReply({ content: `Impossible de supprimer ces messages : \`${err.message}\`.` });
     }

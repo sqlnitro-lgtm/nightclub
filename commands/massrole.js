@@ -40,9 +40,9 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor(0x00b050)
       .setDescription(
-        `✅ Rôle <@&${role.id}> ajouté à **${added}** membre(s).` +
-          (skippedBlr > 0 ? `\n🔒 ${skippedBlr} membre(s) ignoré(s) (BLR).` : '') +
-          (failed > 0 ? `\n⚠️ ${failed} échec(s).` : '')
+        `<a:1Kiss:1525528118352154674> Rôle <@&${role.id}> ajouté à **${added}** membre(s).` +
+          (skippedBlr > 0 ? `\n<a:hkhi:1525582949708468374> ${skippedBlr} membre(s) ignoré(s) (BLR).` : '') +
+          (failed > 0 ? `\n<:egirl:1526275509464469615> ${failed} échec(s).` : '')
       );
     await interaction.editReply({ embeds: [embed] });
   },

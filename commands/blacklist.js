@@ -14,7 +14,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('blacklist')
     .setDescription('Bannit un membre et le blackliste (re-banni automatiquement s\'il tente de revenir)')
-    .setContexts([InteractionContextType.Guild])
+    .setContexts([InteractionContextType.Guild])
     .addUserOption((opt) => opt.setName('membre').setDescription('Le membre concerné')
     .setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
@@ -30,7 +30,7 @@ module.exports = {
       return interaction.reply({ content: `<@${targetUser.id}> est déjà sur la liste noire.`, ephemeral: true });
     }
     if (isWhitelisted(interaction.guild.id, targetUser.id)) {
-      return interaction.reply({ content: `<@${targetUser.id}> est sur la liste blanche — protégé du blacklist (voir \`/unwhitelist\`).`, ephemeral: true });
+      return interaction.reply({ content: `<@${targetUser.id}> est sur la liste blanche — protégé du blacklist (voir \`&wl\`).`, ephemeral: true });
     }
 
     if (target) {
@@ -40,7 +40,7 @@ module.exports = {
       if (!target.bannable) {
         return interaction.reply({ content: "Le bot n'a pas la permission de bannir ce membre.", ephemeral: true });
       }
-      await target.send({ content: `⛔ Tu as été blacklisté sur **${interaction.guild.name}**.${reason ? `\nRaison : ${reason}` : ''}` }).catch(() => {});
+      await target.send({ content: `<:PayPal:1526628472984965280> Tu as été blacklisté sur **${interaction.guild.name}**.${reason ? `\nRaison : ${reason}` : ''}` }).catch(() => {});
     }
 
     try {
@@ -52,7 +52,7 @@ module.exports = {
     addToBlacklist(interaction.guild.id, targetUser.id);
     await logModAction(interaction.guild, { action: 'blacklist', target: targetUser, moderator: interaction.user, reason });
 
-    const embed = new EmbedBuilder().setColor(0xff0000).setDescription(`⛔ <@${targetUser.id}> a été banni et blacklisté.` + (reason ? `\n**Raison :** ${reason}` : ''));
+    const embed = new EmbedBuilder().setColor(0xff0000).setDescription(`<:PayPal:1526628472984965280> <@${targetUser.id}> a été banni et blacklisté.` + (reason ? `\n**Raison :** ${reason}` : ''));
     await interaction.reply({ embeds: [embed] });
   },
 };

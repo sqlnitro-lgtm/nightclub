@@ -37,7 +37,7 @@ module.exports = {
       return interaction.reply({ content: "Le bot n'a pas la permission de bannir ce membre.", ephemeral: true });
     }
 
-    await target.send({ content: `🔨 Tu as été expulsé (softban) de **${interaction.guild.name}** — tu peux revenir.${reason ? `\nRaison : ${reason}` : ''}` }).catch(() => {});
+    await target.send({ content: `<a:ableh:1525532035928690688> Tu as été expulsé (softban) de **${interaction.guild.name}** — tu peux revenir.${reason ? `\nRaison : ${reason}` : ''}` }).catch(() => {});
 
     try {
       await interaction.guild.members.ban(target.id, { deleteMessageSeconds: deleteDays * 24 * 60 * 60, reason: `Softban : ${reason ?? 'aucune raison'}` });
@@ -50,7 +50,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0xff6600)
-      .setDescription(`🔨 <@${target.id}> a été softban (messages purgés, peut revenir).` + (reason ? `\n**Raison :** ${reason}` : ''));
+      .setDescription(`<a:ableh:1525532035928690688> <@${target.id}> a été softban (messages purgés, peut revenir).` + (reason ? `\n**Raison :** ${reason}` : ''));
     await interaction.reply({ embeds: [embed] });
   },
 };

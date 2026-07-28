@@ -1,6 +1,6 @@
 /**
  * modLogStore.js - salon de logs configuré par serveur (/logs) + historique
- * des actions de modération par membre (/modlogs).
+ * des actions de modération par membre.
  */
 const fs = require('node:fs');
 const path = require('node:path');
