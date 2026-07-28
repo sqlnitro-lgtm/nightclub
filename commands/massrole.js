@@ -6,7 +6,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('massrole')
     .setDescription('Ajoute un rôle à tous les membres du serveur (respecte le statut BLR)')
-    .setContexts([InteractionContextType.Guild])
+    .setContexts([InteractionContextType.Guild])
     .addRoleOption((opt) => opt.setName('role').setDescription('Le rôle à attribuer à tous').setRequired(true)),
 
   async execute(interaction) {
@@ -20,11 +20,15 @@ module.exports = {
 
     await interaction.deferReply();
 
-    const members = await interaction.guild.members.fetch();
-    let added = 0;
-    let skippedBlr = 0;
-    let failed = 0;
+    let members;
+    try {
+      members = await interaction.guild.members.fetch();
+    } catch (err) {
+      return interaction.editReply({ content: `Impossible de récupérer la liste des membres : \`${err.message}\`.` });
+    }
 
+    const targets = [];
+    let skippedBlr = 0;
     for (const member of members.values()) {
       if (member.user.bot) continue;
       if (member.roles.cache.has(role.id)) continue;
@@ -32,10 +36,15 @@ module.exports = {
         skippedBlr++;
         continue;
       }
-      const ok = await member.roles.add(role, `Mass role par ${interaction.user.tag}`).then(() => true).catch(() => false);
-      if (ok) added++;
-      else failed++;
+      targets.push(member);
     }
+
+    // Envoi en parallèle (le client REST de discord.js gère déjà la limite de
+    // débit en interne) : sur un gros serveur, l'attente séquentielle membre
+    // par membre pouvait donner l'impression que la commande restait bloquée.
+    const results = await Promise.allSettled(targets.map((member) => member.roles.add(role, `Mass role par ${interaction.user.tag}`)));
+    const added = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - added;
 
     const embed = new EmbedBuilder()
       .setColor(0x00b050)

@@ -1,6 +1,6 @@
 /**
  * muteStore.js - mutes "manuels" (rôle Muted) actifs, avec expiration.
- * Distinct du timeout natif Discord (/timeout, /untimeout).
+ * Distinct du timeout natif Discord (/to, /unto).
  */
 const fs = require('node:fs');
 const path = require('node:path');

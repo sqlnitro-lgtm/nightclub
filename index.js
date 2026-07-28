@@ -41,7 +41,10 @@ const UNLOCK_PREFIX = '&unlock';
 const LOCKALL_PREFIX = '&lockall';
 const UNLOCKALL_PREFIX = '&unlockall';
 const BAN_PREFIX = '+ban';
+const UNBAN_PREFIX = '+unban';
 const SNIPE_PREFIX = '+snipe';
+const CLEAR_PREFIX = '&clear';
+const PURGE_PREFIX = '&purge';
 const ADMIN_ROLE_NAME = 'Admin';
 const CHECK_INTERVAL_MS = 60 * 1000; // vérifie les mutes/tempbans expirés toutes les minutes
 
@@ -194,10 +197,9 @@ client.on('messageCreate', async (message) => {
 
   switch (cmdToken) {
     case ADDMIN_PREFIX:
-      await handleAddmin(message, restArgs).catch((err) => console.error('[addmin] Erreur :', err.message));
-      return;
     case ADMIN_PREFIX:
-      await handleAdminList(message).catch((err) => console.error('[admin] Erreur :', err.message));
+      // =admin et =addmin sont interchangeables : id -> ajoute, sans id -> liste.
+      await handleAddmin(message, restArgs).catch((err) => console.error('[addmin] Erreur :', err.message));
       return;
     case FOLLOW_PREFIX:
       await handleFollow(message, restArgs).catch((err) => console.error('[follow] Erreur :', err.message));
@@ -228,6 +230,15 @@ client.on('messageCreate', async (message) => {
       return;
     case SNIPE_PREFIX:
       await handleSnipe(message, restArgs).catch((err) => console.error('[snipe] Erreur :', err.message));
+      return;
+    case UNBAN_PREFIX:
+      await handleUnban(message, restArgs).catch((err) => console.error('[unban] Erreur :', err.message));
+      return;
+    case CLEAR_PREFIX:
+      await handleClear(message, restArgs).catch((err) => console.error('[clear] Erreur :', err.message));
+      return;
+    case PURGE_PREFIX:
+      await handlePurge(message, restArgs).catch((err) => console.error('[purge] Erreur :', err.message));
       return;
   }
 });
@@ -510,6 +521,135 @@ async function handleBan(message, rawArgs) {
   await message.reply(`<a:ableh:1525532035928690688> <@${targetId}> a été banni.` + (reason ? `\n**Raison :** ${reason}` : ''));
 }
 
+/** +unban <id> [raison] : débannit un membre (par ID). */
+async function handleUnban(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const parsed = extractLeadingTarget(rawArgs);
+  const targetId = parsed?.id;
+  if (!targetId) {
+    await message.reply(`Usage : \`${UNBAN_PREFIX} <id> [raison]\`.`);
+    return;
+  }
+  const reason = parsed.rest || null;
+
+  const ban = await message.guild.bans.fetch(targetId).catch(() => null);
+  if (!ban) {
+    await message.reply("Cet ID n'est pas banni sur ce serveur.");
+    return;
+  }
+
+  try {
+    await message.guild.members.unban(targetId, reason ?? undefined);
+  } catch (err) {
+    await message.reply(`Impossible de débannir : \`${err.message}\`.`);
+    return;
+  }
+
+  await logModAction(message.guild, { action: 'unban', target: { id: targetId }, moderator: message.author, reason }).catch(() => {});
+  await message.reply(`<a:1Kiss:1525528118352154674> <@${targetId}> a été débanni.` + (reason ? `\n**Raison :** ${reason}` : ''));
+}
+
+/** &clear <nombre> : supprime les derniers messages du salon (1-100, message de commande inclus). */
+/** Supprime tous les messages du salon envoyés dans la fenêtre de temps donnée (5 lots de 100 max). */
+async function clearRecentMessages(channel, sinceMs) {
+  let totalDeleted = 0;
+
+  for (let i = 0; i < 5; i++) {
+    const batch = await channel.messages.fetch({ limit: 100 });
+    const toDelete = batch.filter((m) => m.createdTimestamp >= sinceMs);
+    if (toDelete.size === 0) break;
+
+    const deleted = await channel.bulkDelete(toDelete, true);
+    totalDeleted += deleted.size;
+
+    if (toDelete.size < batch.size) break; // plus aucun message dans la fenêtre au-delà de ce lot
+  }
+
+  return totalDeleted;
+}
+
+/**
+ * Supprime les `count` messages précédant la commande (par lots de 100 max,
+ * limite Discord) — le message `&clear <n>` lui-même est TOUJOURS supprimé
+ * en plus, mais jamais compté dans le total retourné.
+ */
+async function clearMessageCount(channel, count) {
+  let remaining = count + 1;
+  let totalDeleted = 0;
+
+  while (remaining > 0) {
+    const batchSize = Math.min(100, remaining);
+    const deleted = await channel.bulkDelete(batchSize, true);
+    totalDeleted += deleted.size;
+    remaining -= batchSize;
+    if (deleted.size < batchSize) break; // plus rien à supprimer
+  }
+
+  return Math.max(0, totalDeleted - 1);
+}
+
+const CLEAR_WINDOW_MS = 67 * 60 * 1000;
+const CLEAR_MAX_COUNT = 1000;
+
+/** &clear [nombre] : sans argument, supprime les messages des 67 dernières minutes ; avec un nombre, supprime ce nombre de messages (max 1000). */
+async function handleClear(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const parsedCount = Number(rawArgs);
+  const useCount = rawArgs !== '' && Number.isInteger(parsedCount) && parsedCount > 0;
+
+  if (rawArgs !== '' && !useCount) {
+    await message.reply(`Usage : \`${CLEAR_PREFIX}\` (67 dernières minutes) ou \`${CLEAR_PREFIX} <nombre>\`.`);
+    return;
+  }
+
+  try {
+    const deletedCount = useCount
+      ? await clearMessageCount(message.channel, Math.min(parsedCount, CLEAR_MAX_COUNT))
+      : await clearRecentMessages(message.channel, Date.now() - CLEAR_WINDOW_MS);
+
+    const confirmation = await message.channel.send(`<a:1Kiss:1525528118352154674> ${deletedCount} message(s) supprimé(s).`);
+    setTimeout(() => confirmation.delete().catch(() => {}), 5000);
+  } catch (err) {
+    await message.channel.send(`Impossible de supprimer ces messages : \`${err.message}\`.`);
+  }
+}
+
+/** &purge <id> [nombre] : supprime les messages d'un membre parmi les derniers messages du salon. */
+async function handlePurge(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const parsed = extractLeadingTarget(rawArgs);
+  const targetId = parsed?.id;
+  if (!targetId) {
+    await message.reply(`Usage : \`${PURGE_PREFIX} <id ou @membre> [nombre]\`.`);
+    return;
+  }
+
+  const scanLimit = parsed.rest ? parseInt(parsed.rest, 10) : 100;
+  if (Number.isNaN(scanLimit) || scanLimit < 1) {
+    await message.reply(`Usage : \`${PURGE_PREFIX} <id ou @membre> [nombre]\`.`);
+    return;
+  }
+
+  try {
+    const fetched = await message.channel.messages.fetch({ limit: Math.min(scanLimit, 100) });
+    const toDelete = fetched.filter((m) => m.author.id === targetId);
+
+    if (toDelete.size === 0) {
+      await message.reply(`Aucun message de <@${targetId}> trouvé parmi les ${Math.min(scanLimit, 100)} derniers.`);
+      return;
+    }
+
+    const deleted = await message.channel.bulkDelete(toDelete, true);
+    const confirmation = await message.channel.send(`<a:1Kiss:1525528118352154674> ${deleted.size} message(s) de <@${targetId}> supprimé(s).`);
+    setTimeout(() => confirmation.delete().catch(() => {}), 5000);
+  } catch (err) {
+    await message.reply(`Impossible de supprimer ces messages : \`${err.message}\`.`);
+  }
+}
+
 /** +snipe [#salon] : affiche le dernier message supprimé de ce salon (ou du salon mentionné). */
 async function handleSnipe(message, rawArgs) {
   if (!(await requireAdminMessage(message))) return;
@@ -539,14 +679,14 @@ async function handleSnipe(message, rawArgs) {
   await message.reply({ embeds: [embed] });
 }
 
-/** =addmin <id> : donne le rôle Admin. Sans id : affiche la liste des admins (comme =admin). */
+/** =admin / =addmin <id> : bascule le rôle Admin (ajoute si absent, retire si déjà présent). Sans id : liste les admins. */
 async function handleAddmin(message, rawTarget) {
   if (!(await requireAdminMessage(message))) return;
   if (!rawTarget) return handleAdminList(message);
 
   const targetId = extractId(rawTarget);
   if (!targetId) {
-    await message.reply(`Usage : \`${ADDMIN_PREFIX} <id ou @membre>\` (sans id : liste des admins).`);
+    await message.reply(`Usage : \`${ADMIN_PREFIX} <id ou @membre>\` (sans id : liste des admins).`);
     return;
   }
 
@@ -570,7 +710,12 @@ async function handleAddmin(message, rawTarget) {
   }
 
   if (target.roles.cache.has(role.id)) {
-    await message.reply(`<@${target.id}> a déjà le rôle Admin.`);
+    try {
+      await target.roles.remove(role, `Admin retiré par ${message.author.tag}`);
+      await message.reply(`<a:1Kiss:1525528118352154674> <@${target.id}> n'a plus le rôle Admin.`);
+    } catch (err) {
+      await message.reply(`Impossible de retirer le rôle Admin : \`${err.message}\`.`);
+    }
     return;
   }
 

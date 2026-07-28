@@ -5,7 +5,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('massunrole')
     .setDescription('Retire un rôle à tous les membres qui l\'ont')
-    .setContexts([InteractionContextType.Guild])
+    .setContexts([InteractionContextType.Guild])
     .addRoleOption((opt) => opt.setName('role').setDescription('Le rôle à retirer à tous')
     .setRequired(true)),
 
@@ -22,16 +22,19 @@ module.exports = {
 
     // role.members ne reflète que le cache : un fetch complet garantit qu'on
     // ne rate personne qui n'était pas déjà en cache (gros serveurs).
-    await interaction.guild.members.fetch();
-    const members = role.members;
-    let removed = 0;
-    let failed = 0;
-
-    for (const member of members.values()) {
-      const ok = await member.roles.remove(role, `Mass unrole par ${interaction.user.tag}`).then(() => true).catch(() => false);
-      if (ok) removed++;
-      else failed++;
+    try {
+      await interaction.guild.members.fetch();
+    } catch (err) {
+      return interaction.editReply({ content: `Impossible de récupérer la liste des membres : \`${err.message}\`.` });
     }
+    const members = [...role.members.values()];
+
+    // Envoi en parallèle (le client REST de discord.js gère déjà la limite de
+    // débit en interne) : sur un gros serveur, l'attente séquentielle membre
+    // par membre pouvait donner l'impression que la commande restait bloquée.
+    const results = await Promise.allSettled(members.map((member) => member.roles.remove(role, `Mass unrole par ${interaction.user.tag}`)));
+    const removed = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - removed;
 
     const embed = new EmbedBuilder()
       .setColor(0xff6600)

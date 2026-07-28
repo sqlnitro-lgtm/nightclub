@@ -2,7 +2,7 @@
  * helpText.js
  * ------------------------------------------------------------------
  * Génère le texte de /help. Toutes les commandes de modération sont
- * réservées aux Administrateurs (voir =addmin et data/permissionHelper.js) :
+ * réservées aux Administrateurs (voir =admin et data/permissionHelper.js) :
  * un seul indicateur `isAdmin` (propriétaire du bot ou permission
  * Administrator) décide si les sections de modération s'affichent.
  * ------------------------------------------------------------------
@@ -30,10 +30,10 @@ function buildHelpText(isAdmin) {
       ]),
       section('🔨', 'Sanctions', [
         '> **/mute** / **/unmute** — Mute manuel (rôle Muted), durée fixe ou indéfini.',
-        '> **/timeout** / **/untimeout** — Timeout natif Discord.',
-        "> **&warn \\<id\\> \\<raison\\>** / **&unwarn \\<id\\> [numéro]** / **/resetwarnings** — Avertissements.",
+        '> **/to** / **/unto** — Timeout natif Discord.',
+        "> **&warn \\<id\\> \\<raison\\>** / **&unwarn \\<id\\> [numéro]** — Avertissements.",
         '> **/kick** — Expulse un membre.',
-        '> **+ban \\<id\\> [raison]** / **/unban** / **/tempban** / **/softban** — Bannissements (définitif, temporaire, ou softban).',
+        '> **+ban \\<id\\> [raison]** / **+unban \\<id\\> [raison]** / **/tempban** / **/softban** — Bannissements (définitif, temporaire, ou softban).',
       ]),
       section('🐕', 'Fun', [
         '> **/dog** — Met un membre en laisse (pseudo verrouillé, te suit en vocal), ou le libère.',
@@ -56,8 +56,8 @@ function buildHelpText(isAdmin) {
       section('👤', 'Pseudo', ["> **/nick** / **/resetnickname** — Change/réinitialise le pseudo d'un membre."]),
       section('😀', 'Emojis', ['> **/addemoji** / **/removeemoji** — Gère les emojis du serveur.']),
       section('🧹', 'Messages', [
-        '> **/clear** — Supprime les derniers messages du salon.',
-        "> **/purge** — Supprime les messages d'un membre précis.",
+        '> **&clear [nombre]** — Sans argument : 67 dernières minutes. Avec un nombre : ce nombre de messages (max 1000).',
+        "> **&purge \\<id\\> [nombre]** — Supprime les messages d'un membre précis (parmi les X derniers, 100 par défaut).",
         '> **+snipe [#salon]** — Dernier message supprimé du salon (celui-ci par défaut).',
       ]),
       section('⛔', 'Listes & Logs', [
@@ -66,8 +66,8 @@ function buildHelpText(isAdmin) {
         '> **/logs** — Configure le salon de logs de modération.',
       ]),
       section('👑', 'Administration', [
-        '> **=addmin \\<id\\>** — Donne le rôle Admin (sans id : liste les admins).',
-        '> **=admin** — Liste tous les membres ayant le rôle Admin.',
+        '> **=admin \\<id\\>** (bascule, ou **=addmin**) — Donne le rôle Admin, ou le retire s\'il l\'a déjà.',
+        '> **=admin** (sans id) — Liste tous les membres ayant le rôle Admin.',
       ])
     );
   }

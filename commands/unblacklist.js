@@ -7,7 +7,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('unblacklist')
     .setDescription("Retire un membre de la liste noire (ne le débannit pas automatiquement)")
-    .setContexts([InteractionContextType.Guild])
+    .setContexts([InteractionContextType.Guild])
     .addStringOption((opt) => opt.setName('id').setDescription('ID Discord du membre').setRequired(true))
     .addStringOption((opt) => opt.setName('raison').setDescription('Raison').setRequired(false)),
 
@@ -29,7 +29,7 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor(0x00b050)
-      .setDescription(`<a:1Kiss:1525528118352154674> <@${userId}> retiré de la liste noire (le débannissement du serveur, si besoin, se fait séparément avec \`/unban\`).`);
+      .setDescription(`<a:1Kiss:1525528118352154674> <@${userId}> retiré de la liste noire (le débannissement du serveur, si besoin, se fait séparément avec \`+unban\`).`);
     await interaction.reply({ embeds: [embed] });
   },
 };

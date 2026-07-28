@@ -1,6 +1,6 @@
 /**
  * durationChoices.js - options de durée standard (5 min, 10 min, 15 min,
- * 30 min, 1 heure, 1 jour), réutilisées par /mute, /timeout, /tempban.
+ * 30 min, 1 heure, 1 jour), réutilisées par /mute, /to, /tempban.
  */
 const DURATION_CHOICES = [
   { name: '5 minutes', value: '5m' },
