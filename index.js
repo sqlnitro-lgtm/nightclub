@@ -158,6 +158,25 @@ for (const file of commandFiles) {
 // --------------------------------------------------------------------
 const GUILD_APPROVAL_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24h
 
+/**
+ * Installe les slash commands sur un serveur précis. Le déploiement par
+ * serveur prend effet immédiatement, contrairement au déploiement global qui
+ * met jusqu'à 1h. Retourne le nombre de commandes installées, ou 0 en cas
+ * d'échec. Qui peut s'en servir reste décidé par =admin (permissionHelper).
+ */
+async function deployCommandsToGuild(guildId) {
+  const body = [...client.commands.values()].map((command) => command.data.toJSON());
+
+  try {
+    const data = await client.application.commands.set(body, guildId);
+    console.log(`[deploy] ${data.size ?? body.length} commande(s) installée(s) sur ${guildId}.`);
+    return data.size ?? body.length;
+  } catch (err) {
+    console.error(`[deploy] Échec sur ${guildId} :`, err.message);
+    return 0;
+  }
+}
+
 function isGuildPendingApproval(guild) {
   return Boolean(guild) && !isGuildApproved(guild.id);
 }
@@ -201,7 +220,18 @@ async function requestGuildApproval(guild) {
     collector.on('collect', async (i) => {
       if (i.customId === `guildapprove_yes_${guild.id}`) {
         approveGuild(guild.id);
-        await i.update({ content: `<a:1Kiss:1525528118352154674> Serveur **${guild.name}** autorisé.`, embeds: [], components: [] }).catch(() => {});
+        const deployed = await deployCommandsToGuild(guild.id);
+        await i
+          .update({
+            content:
+              `<a:1Kiss:1525528118352154674> Serveur **${guild.name}** autorisé.\n` +
+              (deployed
+                ? `${deployed} commande(s) installée(s) — utilisables par les admins (\`=admin <id>\`).`
+                : "⚠️ Les commandes n'ont pas pu être installées (le bot a-t-il été invité avec le scope `applications.commands` ?)."),
+            embeds: [],
+            components: [],
+          })
+          .catch(() => {});
       } else if (i.customId === `guildapprove_no_${guild.id}`) {
         await i.update({ content: `Serveur **${guild.name}** refusé — le bot va le quitter.`, embeds: [], components: [] }).catch(() => {});
         await client.guilds.cache.get(guild.id)?.leave().catch(() => {});

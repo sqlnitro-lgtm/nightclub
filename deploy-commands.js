@@ -1,12 +1,16 @@
 /**
  * deploy-commands.js
  * ------------------------------------------------------------------
- * Enregistre les slash commands auprès de Discord.
+ * Enregistre les slash commands sur TOUS les serveurs autorisés
+ * (data/approvedGuilds.json — voir =ticket/approbation dans index.js).
  *
- * - Si GUILD_ID est défini dans le .env : déploiement instantané sur
- *   ce serveur uniquement (idéal en développement).
- * - Sinon : déploiement global (peut prendre jusqu'à 1h à se propager,
- *   mais fonctionne aussi en message privé).
+ * Le déploiement par serveur est INSTANTANÉ, là où un déploiement global
+ * met jusqu'à 1h à se propager. Les commandes globales sont effacées au
+ * passage : sinon elles feraient doublon avec celles des serveurs.
+ *
+ * Un serveur approuvé plus tard reçoit ses commandes automatiquement au
+ * moment de l'approbation (voir deployCommandsToGuild dans index.js) ; il
+ * n'y a donc pas besoin de relancer ce script à chaque nouveau serveur.
  *
  * Usage : node deploy-commands.js
  * ------------------------------------------------------------------
@@ -16,8 +20,9 @@ require('dotenv').config();
 const fs = require('node:fs');
 const path = require('node:path');
 const { REST, Routes } = require('discord.js');
+const { loadApprovedGuilds } = require('./data/approvedGuildsStore');
 
-const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID } = process.env;
+const { DISCORD_TOKEN, CLIENT_ID } = process.env;
 
 if (!DISCORD_TOKEN || !CLIENT_ID) {
   console.error('❌ DISCORD_TOKEN et CLIENT_ID doivent être définis dans le fichier .env');
@@ -36,21 +41,36 @@ for (const file of commandFiles) {
 const rest = new REST().setToken(DISCORD_TOKEN);
 
 (async () => {
-  try {
-    console.log(`🔄 Déploiement de ${commands.length} commande(s)...`);
+  const guildIds = loadApprovedGuilds();
 
-    const route = GUILD_ID
-      ? Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID)
-      : Routes.applicationCommands(CLIENT_ID);
-
-    const data = await rest.put(route, { body: commands });
-
-    console.log(
-      `✅ ${data.length} commande(s) déployée(s) ${
-        GUILD_ID ? `sur le serveur ${GUILD_ID}` : "globalement (jusqu'à 1h de propagation)"
-      }.`
-    );
-  } catch (err) {
-    console.error('❌ Erreur lors du déploiement des commandes :', err);
+  if (guildIds.length === 0) {
+    console.warn("⚠️  Aucun serveur autorisé dans data/approvedGuilds.json — rien à déployer.");
+    return;
   }
+
+  // Les commandes globales feraient doublon avec les commandes par serveur.
+  const globals = await rest.get(Routes.applicationCommands(CLIENT_ID)).catch(() => []);
+  if (globals.length > 0) {
+    console.log(`🧹 Suppression de ${globals.length} commande(s) globale(s) (évite les doublons)...`);
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: [] }).catch((err) => {
+      console.error('   Échec du nettoyage global :', err.message);
+    });
+  }
+
+  console.log(`🔄 Déploiement de ${commands.length} commande(s) sur ${guildIds.length} serveur(s) autorisé(s)...`);
+
+  let ok = 0;
+  for (const guildId of guildIds) {
+    try {
+      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, guildId), { body: commands });
+      console.log(`   ✅ ${guildId}`);
+      ok++;
+    } catch (err) {
+      // Typiquement : le bot n'est plus sur ce serveur, ou il y a été invité
+      // sans le scope applications.commands.
+      console.error(`   ❌ ${guildId} — ${err.message}`);
+    }
+  }
+
+  console.log(`\n✅ ${ok}/${guildIds.length} serveur(s) à jour (effet immédiat).`);
 })();
