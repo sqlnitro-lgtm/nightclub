@@ -141,11 +141,32 @@ function escapeForCharClass(chars) {
   return chars.replace(/[\\\]^-]/g, '\\$&');
 }
 
+/**
+ * Mots parfaitement légitimes qui COMMENCENT par un mot interdit, et que la
+ * règle du début de mot ne suffit donc pas à protéger ("violet", "violon" et
+ * "violence" commencent tous par "viol"). Écrire réellement "viol" ou
+ * "violer" reste bloqué.
+ *
+ * Les mots où l'insulte est simplement au milieu ("député", "dispute",
+ * "réputé", "calcul") n'ont pas besoin d'y figurer : ils sont déjà protégés
+ * par la règle du début de mot (voir buildPattern).
+ */
+const SAFE_WORDS = [
+  // viol...
+  'violet', 'violette', 'violon', 'violoncelle', 'violoniste',
+  'violence', 'violent', 'violente', 'violemment', 'violace',
+  // negro...
+  'negroni',
+  // pede... / pedo...
+  'pedestre', 'pedopsychiatre', 'pedopsychiatrie', 'pedologie', 'pedoncule',
+];
+
 // Le motif d'un mot est coûteux à construire : on le garde en cache.
 const patternCache = new Map();
 
-function buildPattern(word) {
-  if (patternCache.has(word)) return patternCache.get(word);
+function buildPattern(word, flags = 'i') {
+  const cacheKey = `${flags}:${word}`;
+  if (patternCache.has(cacheKey)) return patternCache.get(cacheKey);
 
   // Entre deux lettres, on tolère n'importe quoi qui ne soit ni une lettre ni
   // un chiffre (espaces, points, tirets, emojis...) — c'est ce qui permet de
@@ -159,18 +180,48 @@ function buildPattern(word) {
     })
     .join(separator);
 
-  const pattern = new RegExp(body, 'i');
-  patternCache.set(word, pattern);
+  // Le mot interdit doit DÉBUTER un mot : sans ça, "pute" se déclencherait au
+  // milieu de "député" ou "dispute", et "cul" au milieu de "calcul". La fin
+  // reste libre, pour continuer d'attraper les dérivés ("violer", "negros").
+  const pattern = new RegExp(`(?<![a-z0-9])${body}`, flags);
+  patternCache.set(cacheKey, pattern);
   return pattern;
 }
 
-/** Le premier mot interdit détecté dans ce texte, ou null. */
+/** Toutes les positions [début, fin] où `word` apparaît dans le texte. */
+function matchRanges(word, haystack) {
+  const ranges = [];
+  const pattern = buildPattern(word, 'gi');
+  pattern.lastIndex = 0;
+
+  let match;
+  while ((match = pattern.exec(haystack)) !== null) {
+    ranges.push([match.index, match.index + match[0].length]);
+    if (match.index === pattern.lastIndex) pattern.lastIndex++; // sécurité anti-boucle
+  }
+  return ranges;
+}
+
+/** Le premier mot interdit réellement écrit dans ce texte, ou null. */
 function findBannedWord(guildId, text) {
   const { enabled, words } = getConfig(guildId);
   if (!enabled || words.length === 0) return null;
 
   const haystack = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  return words.find((word) => buildPattern(word).test(haystack)) ?? null;
+
+  // Zones du texte occupées par un mot légitime ("violet", "violence"...).
+  const safeRanges = SAFE_WORDS.flatMap((safe) => matchRanges(safe, haystack));
+
+  for (const word of words) {
+    for (const [start, end] of matchRanges(word, haystack)) {
+      // Le mot interdit ne compte pas s'il est entièrement noyé dans un mot
+      // autorisé — c'est le cas du "viol" de "violet" ou "violence".
+      const insideSafeWord = safeRanges.some(([safeStart, safeEnd]) => start >= safeStart && end <= safeEnd);
+      if (!insideSafeWord) return word;
+    }
+  }
+
+  return null;
 }
 
-module.exports = { getConfig, toggleEnabled, toggleWord, baseForm, findBannedWord };
+module.exports = { getConfig, toggleEnabled, toggleWord, baseForm, findBannedWord, SAFE_WORDS };
