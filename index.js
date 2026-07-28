@@ -27,6 +27,8 @@ const {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  AuditLogEvent,
+  Partials,
 } = require('discord.js');
 
 const { isBlacklisted, addToBlacklist, removeFromBlacklist } = require('./data/blacklistStore');
@@ -41,6 +43,10 @@ const { getLeash } = require('./data/leashStore');
 const { canModerate } = require('./data/hierarchyHelper');
 const { addWarn, getWarns, removeWarn } = require('./data/warnStore');
 const { getLockAll, setLockAll, clearLockAll } = require('./data/lockAllStore');
+const { getLinkedGroups, addLinkedGroup } = require('./data/linkedRolesStore');
+const { getConfig: getSpConfig, setChannel: setSpChannel, disable: disableSp } = require('./data/photoSubmitStore');
+const { isGuildApproved, approveGuild } = require('./data/approvedGuildsStore');
+const { OWNER_IDS, isOwner } = require('./data/ownerStore');
 const { requireAdmin, requireAdminMessage } = require('./data/permissionHelper');
 
 const MV_PREFIX = '=mv';
@@ -63,6 +69,16 @@ const PURGE_PREFIX = '&purge';
 const CHANNEL_PREFIX = '&channel';
 const MUET_PREFIX = '&muet';
 const SOURD_PREFIX = '&sourd';
+const LINK_PREFIX = '=link';
+const SP_PREFIX = '=s&p';
+const pendingPhotoSubmissions = new Map();
+const TICKET_PREFIX = '=ticket';
+const TICKET_CATEGORY_NAME = 'tickets';
+const TICKET_CATEGORIES = [
+  { value: 'abus', prefix: 'abus', label: 'Abus', emoji: '⚠️' },
+  { value: 'contrib', prefix: 'contrib', label: 'Contrib / Partenariat', emoji: '🤝' },
+  { value: 'admin', prefix: 'admin', label: 'Contacter les admins', emoji: '👑' },
+];
 const LOCKALL_TYPES = [ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum];
 const ADMIN_ROLE_NAME = 'Admin';
 const CHECK_INTERVAL_MS = 60 * 1000; // vérifie les mutes/tempbans expirés toutes les minutes
@@ -75,7 +91,9 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.DirectMessages,
   ],
+  partials: [Partials.Channel, Partials.Message],
 });
 
 // --------------------------------------------------------------------
@@ -96,10 +114,92 @@ for (const file of commandFiles) {
 }
 
 // --------------------------------------------------------------------
+// Autorisation des serveurs : le bot ne fonctionne que sur les serveurs où
+// le propriétaire a explicitement autorisé sa présence (voir
+// data/approvedGuildsStore.js). Aucun serveur n'est exempté par défaut.
+// --------------------------------------------------------------------
+const GUILD_APPROVAL_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24h
+
+function isGuildPendingApproval(guild) {
+  return Boolean(guild) && !isGuildApproved(guild.id);
+}
+
+async function requestGuildApproval(guild) {
+  const guildOwner = await guild.fetchOwner().catch(() => null);
+  const auditLogs = await guild.fetchAuditLogs({ type: AuditLogEvent.BotAdd, limit: 5 }).catch(() => null);
+  const addedBy = auditLogs ? [...auditLogs.entries.values()].find((e) => e.target?.id === client.user.id)?.executor : null;
+
+  const embed = new EmbedBuilder()
+    .setColor(0x9b59b6)
+    .setTitle('🍸 Nouvelle demande d\'accès')
+    .setDescription(
+      `**Serveur :** ${guild.name} (\`${guild.id}\`)\n` +
+        `**Membres :** ${guild.memberCount}\n` +
+        `**Propriétaire du serveur :** ${guildOwner ? `<@${guildOwner.id}>` : 'inconnu'}\n` +
+        `**Ajouté par :** ${addedBy ? `<@${addedBy.id}>` : 'inconnu'}\n\n` +
+        'Autoriser la présence du bot sur ce serveur ?'
+    );
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`guildapprove_yes_${guild.id}`).setLabel('Autoriser').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`guildapprove_no_${guild.id}`).setLabel('Refuser').setStyle(ButtonStyle.Danger)
+  );
+
+  let dmSent = false;
+
+  for (const ownerId of OWNER_IDS) {
+    const ownerUser = await client.users.fetch(ownerId).catch(() => null);
+    if (!ownerUser) continue;
+
+    const dm = await ownerUser.send({ embeds: [embed], components: [row] }).catch(() => null);
+    if (!dm) continue;
+    dmSent = true;
+
+    const collector = dm.createMessageComponentCollector({
+      filter: (i) => i.user.id === ownerId,
+      time: GUILD_APPROVAL_TIMEOUT_MS,
+    });
+
+    collector.on('collect', async (i) => {
+      if (i.customId === `guildapprove_yes_${guild.id}`) {
+        approveGuild(guild.id);
+        await i.update({ content: `<a:1Kiss:1525528118352154674> Serveur **${guild.name}** autorisé.`, embeds: [], components: [] }).catch(() => {});
+      } else if (i.customId === `guildapprove_no_${guild.id}`) {
+        await i.update({ content: `Serveur **${guild.name}** refusé — le bot va le quitter.`, embeds: [], components: [] }).catch(() => {});
+        await client.guilds.cache.get(guild.id)?.leave().catch(() => {});
+      }
+      collector.stop('resolved');
+    });
+
+    collector.on('end', async (_collected, reason) => {
+      if (reason === 'resolved' || isGuildApproved(guild.id)) return;
+      await dm.edit({ content: `⏱️ Délai dépassé pour **${guild.name}** — départ automatique.`, embeds: [], components: [] }).catch(() => {});
+      await client.guilds.cache.get(guild.id)?.leave().catch(() => {});
+    });
+  }
+
+  if (!dmSent) {
+    console.warn(`[approval] Impossible de contacter un propriétaire pour ${guild.name} (${guild.id}) — départ.`);
+    await guild.leave().catch(() => {});
+  }
+}
+
+client.on('guildCreate', async (guild) => {
+  if (isGuildApproved(guild.id)) return;
+  await requestGuildApproval(guild).catch((err) => console.error('[approval] Erreur :', err.message));
+});
+
+// --------------------------------------------------------------------
 // Prêt
 // --------------------------------------------------------------------
 client.once('clientReady', () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
+
+  for (const guild of client.guilds.cache.values()) {
+    if (!isGuildApproved(guild.id)) {
+      requestGuildApproval(guild).catch((err) => console.error('[approval] Erreur :', err.message));
+    }
+  }
 
   checkExpiredMutesAndBans().catch((err) => console.error('[expiration] Erreur :', err.message));
   setInterval(() => {
@@ -111,6 +211,15 @@ client.once('clientReady', () => {
 // Gestion des interactions (slash commands, boutons et modals de &channel)
 // --------------------------------------------------------------------
 client.on('interactionCreate', async (interaction) => {
+  if (interaction.guild && isGuildPendingApproval(interaction.guild)) {
+    if (interaction.isRepliable()) {
+      await interaction
+        .reply({ content: "Ce serveur est en attente d'autorisation — le bot n'est pas encore utilisable ici.", ephemeral: true })
+        .catch(() => {});
+    }
+    return;
+  }
+
   if (interaction.isButton() && interaction.customId.startsWith('nc_channel:')) {
     await handleChannelButton(interaction).catch((err) => console.error('[channel-button] Erreur :', err.message));
     return;
@@ -118,6 +227,21 @@ client.on('interactionCreate', async (interaction) => {
 
   if (interaction.isModalSubmit() && interaction.customId.startsWith('nc_channel_modal:')) {
     await handleChannelModal(interaction).catch((err) => console.error('[channel-modal] Erreur :', err.message));
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('nc_sp:')) {
+    await handleSpButton(interaction).catch((err) => console.error('[sp-button] Erreur :', err.message));
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId.startsWith('nc_ticket:')) {
+    await handleTicketButton(interaction).catch((err) => console.error('[ticket-button] Erreur :', err.message));
+    return;
+  }
+
+  if (interaction.isButton() && interaction.customId === 'nc_ticket_close') {
+    await handleTicketClose(interaction).catch((err) => console.error('[ticket-close] Erreur :', err.message));
     return;
   }
 
@@ -162,10 +286,75 @@ client.on('guildMemberAdd', async (member) => {
 // --------------------------------------------------------------------
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
   const leash = getLeash(newMember.guild.id, newMember.id);
-  if (!leash) return;
-  if (newMember.nickname === leash.lockedNick) return;
-  await newMember.setNickname(leash.lockedNick, 'Pseudo verrouillé (laisse /dog active)').catch(() => {});
+  if (leash && newMember.nickname !== leash.lockedNick) {
+    await newMember.setNickname(leash.lockedNick, 'Pseudo verrouillé (laisse /dog active)').catch(() => {});
+  }
+
+  await handleLinkedRoles(oldMember, newMember).catch((err) => console.error('[link] Erreur :', err.message));
 });
+
+// --------------------------------------------------------------------
+// Rôles liés (=link) : si un membre reçoit l'un des rôles d'un groupe lié,
+// les autres lui sont ajoutés automatiquement (quelle que soit la façon
+// dont le rôle a été donné : /role, clic droit, etc.). Si un admin bot
+// (propriétaire ou rôle Admin) lui retire l'un d'eux, les autres sont
+// retirés aussi. Un court "cooldown" empêche nos propres ajouts/retraits
+// en cascade de se re-déclencher eux-mêmes.
+// --------------------------------------------------------------------
+const linkCascadeCooldown = new Set();
+
+async function handleLinkedRoles(oldMember, newMember) {
+  if (linkCascadeCooldown.has(newMember.id)) return;
+
+  const groups = getLinkedGroups(newMember.guild.id);
+  if (groups.length === 0) return;
+
+  const oldRoleIds = new Set(oldMember.roles.cache.keys());
+  const newRoleIds = new Set(newMember.roles.cache.keys());
+  const added = [...newRoleIds].filter((id) => !oldRoleIds.has(id));
+  const removed = [...oldRoleIds].filter((id) => !newRoleIds.has(id));
+  if (added.length === 0 && removed.length === 0) return;
+
+  let didCascade = false;
+
+  for (const group of groups) {
+    if (added.some((id) => group.includes(id))) {
+      const missing = group.filter((id) => !newMember.roles.cache.has(id));
+      for (const roleId of missing) {
+        didCascade = true;
+        await newMember.roles.add(roleId, 'Rôle lié (=link)').catch(() => {});
+      }
+    }
+
+    if (removed.some((id) => group.includes(id))) {
+      const removedByAdmin = await wasRoleChangeByBotAdmin(newMember);
+      if (!removedByAdmin) continue;
+      const stillPresent = group.filter((id) => newMember.roles.cache.has(id));
+      for (const roleId of stillPresent) {
+        didCascade = true;
+        await newMember.roles.remove(roleId, 'Rôle lié retiré (=link)').catch(() => {});
+      }
+    }
+  }
+
+  if (didCascade) {
+    linkCascadeCooldown.add(newMember.id);
+    setTimeout(() => linkCascadeCooldown.delete(newMember.id), 3000);
+  }
+}
+
+/** Le dernier changement de rôle de ce membre a-t-il été fait par le propriétaire ou un Admin bot ? */
+async function wasRoleChangeByBotAdmin(member) {
+  const logs = await member.guild.fetchAuditLogs({ type: AuditLogEvent.MemberRoleUpdate, limit: 5 }).catch(() => null);
+  if (!logs) return false;
+
+  const entry = [...logs.entries.values()].find((e) => e.target?.id === member.id && Date.now() - e.createdTimestamp < 5000);
+  if (!entry?.executor) return false;
+
+  if (isOwner(entry.executor.id)) return true;
+  const executorMember = await member.guild.members.fetch(entry.executor.id).catch(() => null);
+  return executorMember?.permissions.has(PermissionFlagsBits.Administrator) ?? false;
+}
 
 // --------------------------------------------------------------------
 // Snipe : mémorise le dernier message supprimé de chaque salon (voir
@@ -235,12 +424,54 @@ async function logVoiceStateChange(oldState, newState) {
 }
 
 // --------------------------------------------------------------------
+// Soumission de photos par MP (=s&p) : une image reçue en MP (quand activé)
+// propose un choix Homme/Femme ; voir handleSpButton pour la suite.
+// --------------------------------------------------------------------
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || message.guild) return; // uniquement les MP
+
+  const config = getSpConfig();
+  if (!config.enabled) return;
+
+  const image = message.attachments.find((a) => a.contentType?.startsWith('image/'));
+  if (!image) return;
+
+  const token = Math.random().toString(36).slice(2, 10);
+  pendingPhotoSubmissions.set(token, {
+    imageUrl: image.url,
+    authorId: message.author.id,
+    authorTag: message.author.tag,
+  });
+  setTimeout(() => pendingPhotoSubmissions.delete(token), 10 * 60 * 1000);
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setDescription('Choisis une catégorie pour ta photo :')
+    .setImage(image.url);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`nc_sp:${token}:male`).setLabel('Homme').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`nc_sp:${token}:female`).setLabel('Femme').setStyle(ButtonStyle.Danger)
+  );
+  await message.channel.send({ embeds: [embed], components: [row] }).catch(() => {});
+});
+
+// --------------------------------------------------------------------
 // Commandes préfixées : =mv (déplace un membre dans ton salon vocal),
 // =pv (bascule ton salon vocal courant privé/public), =find (recherche
 // un membre par pseudo/ID).
 // --------------------------------------------------------------------
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
+
+  // Salon de soumission photo (=s&p) : ne garde que les images postées par le
+  // bot — tout message envoyé directement dans ce salon (hors fils, qui ont
+  // leur propre ID de salon) est supprimé.
+  const spConfig = getSpConfig();
+  if (spConfig.enabled && message.channel.id === spConfig.channelId) {
+    await message.delete().catch(() => {});
+    return;
+  }
+
   const content = message.content.trim();
   const lower = content.toLowerCase();
 
@@ -312,6 +543,15 @@ client.on('messageCreate', async (message) => {
       return;
     case SOURD_PREFIX:
       await handleSourd(message, restArgs).catch((err) => console.error('[sourd] Erreur :', err.message));
+      return;
+    case LINK_PREFIX:
+      await handleLink(message, restArgs).catch((err) => console.error('[link] Erreur :', err.message));
+      return;
+    case SP_PREFIX:
+      await handleSp(message, restArgs).catch((err) => console.error('[sp] Erreur :', err.message));
+      return;
+    case TICKET_PREFIX:
+      await handleTicketPanel(message).catch((err) => console.error('[ticket] Erreur :', err.message));
       return;
   }
 });
@@ -1013,6 +1253,203 @@ async function handleChannelModal(interaction) {
       await interaction.reply({ content: `Impossible de renommer ce salon : \`${err.message}\`.`, ephemeral: true });
     }
   }
+}
+
+/** =link <id/@rôle> <id/@rôle> [id/@rôle] [id/@rôle] : lie 2 à 4 rôles ensemble (voir handleLinkedRoles). */
+async function handleLink(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const roleIds = [...new Set(rawArgs.match(/\d{17,20}/g) ?? [])];
+  if (roleIds.length < 2 || roleIds.length > 4) {
+    await message.channel.send(`Usage : \`${LINK_PREFIX} <id/@rôle> <id/@rôle> [id/@rôle] [id/@rôle]\` (2 à 4 rôles).`);
+    return;
+  }
+
+  const roles = [];
+  for (const id of roleIds) {
+    const role = message.guild.roles.cache.get(id);
+    if (!role) {
+      await message.channel.send(`Rôle introuvable : \`${id}\`.`);
+      return;
+    }
+    roles.push(role);
+  }
+
+  addLinkedGroup(message.guild.id, roleIds);
+  await message.channel.send(
+    `<a:1Kiss:1525528118352154674> Rôles liés : ${roles.map((r) => `<@&${r.id}>`).join(', ')} — en attribuer un attribue les autres ; un admin bot qui en retire un retire les autres.`
+  );
+}
+
+/** =s&p [#salon] : bascule la soumission de photos par MP (voir listeners messageCreate/interactionCreate). */
+async function handleSp(message, rawArgs) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const channelMatch = rawArgs.match(/<#(\d+)>/);
+  const config = getSpConfig();
+
+  if (!channelMatch) {
+    await message.channel.send(
+      config.enabled && config.channelId
+        ? `Soumission photo activée — salon actuel : <#${config.channelId}>.`
+        : `Soumission photo désactivée. Usage : \`${SP_PREFIX} #salon\` pour activer/changer (relance sur le même salon pour désactiver).`
+    );
+    return;
+  }
+
+  const channelId = channelMatch[1];
+  if (config.enabled && config.channelId === channelId) {
+    disableSp();
+    await message.channel.send(`<a:1Kiss:1525528118352154674> Soumission photo désactivée (<#${channelId}> ne recevra plus les soumissions).`);
+    return;
+  }
+
+  setSpChannel(message.guild.id, channelId);
+  await message.channel.send(`<a:1Kiss:1525528118352154674> Soumission photo activée — les photos reçues en MP seront postées dans <#${channelId}>.`);
+}
+
+/** Clic sur Homme/Femme suite à une photo envoyée en MP (=s&p) : poste l'image dans le salon configuré. */
+async function handleSpButton(interaction) {
+  const [, token, gender] = interaction.customId.split(':');
+  const pending = pendingPhotoSubmissions.get(token);
+  if (!pending) {
+    await interaction.reply({ content: 'Cette soumission a expiré.', ephemeral: true });
+    return;
+  }
+  pendingPhotoSubmissions.delete(token);
+
+  const config = getSpConfig();
+  if (!config.enabled || !config.channelId) {
+    await interaction.reply({ content: "La soumission de photos n'est plus activée.", ephemeral: true });
+    return;
+  }
+
+  const guild = await client.guilds.fetch(config.guildId).catch(() => null);
+  const channel = guild ? await guild.channels.fetch(config.channelId).catch(() => null) : null;
+  if (!channel) {
+    await interaction.reply({ content: 'Le salon configuré est introuvable.', ephemeral: true });
+    return;
+  }
+
+  const genderLabel = gender === 'male' ? 'Homme' : 'Femme';
+  const embed = new EmbedBuilder()
+    .setColor(gender === 'male' ? 0x3498db : 0xe91e63)
+    .setDescription(`**${genderLabel}** — soumis par ${pending.authorTag}`)
+    .setImage(pending.imageUrl);
+
+  const posted = await channel.send({ embeds: [embed] }).catch(() => null);
+  if (posted) {
+    await posted.react('✅').catch(() => {});
+    await posted.react('🚫').catch(() => {});
+    await posted.startThread({ name: pending.authorTag, autoArchiveDuration: 1440 }).catch(() => {});
+  }
+
+  await interaction.reply({ content: '<a:1Kiss:1525528118352154674> Photo envoyée !', ephemeral: true }).catch(() => {});
+}
+
+/** =ticket : poste le panneau (embed + 3 boutons) pour ouvrir un ticket. */
+async function handleTicketPanel(message) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const embed = new EmbedBuilder()
+    .setColor(0x9b59b6)
+    .setTitle('🍸 Le bar à tickets du club')
+    .setDescription(
+      "Une question, un souci, une envie de collaborer ? Pousse la bonne porte ci-dessous et l'équipe s'occupe de toi.\n\n" +
+        TICKET_CATEGORIES.map((c) => `${c.emoji} **${c.label}**`).join('\n')
+    );
+
+  const row = new ActionRowBuilder().addComponents(
+    TICKET_CATEGORIES.map((c) =>
+      new ButtonBuilder().setCustomId(`nc_ticket:${c.value}`).setLabel(c.label).setEmoji(c.emoji).setStyle(ButtonStyle.Secondary)
+    )
+  );
+
+  await message.channel.send({ embeds: [embed], components: [row] });
+}
+
+/** Clic sur une catégorie du panneau =ticket : crée un salon privé pour ce ticket. */
+async function handleTicketButton(interaction) {
+  const category = TICKET_CATEGORIES.find((c) => c.value === interaction.customId.split(':')[1]);
+  if (!category) return;
+
+  await interaction.deferReply({ ephemeral: true });
+
+  const guild = interaction.guild;
+  if (!guild.members.me.permissions.has(PermissionFlagsBits.ManageChannels)) {
+    await interaction.editReply("Le bot n'a pas la permission de créer des salons.");
+    return;
+  }
+
+  let ticketCategory = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('ticket'));
+  if (!ticketCategory) {
+    ticketCategory = await guild.channels.create({ name: TICKET_CATEGORY_NAME, type: ChannelType.GuildCategory }).catch(() => null);
+  }
+
+  const adminRole = guild.roles.cache.find((r) => r.name === ADMIN_ROLE_NAME);
+  const safeName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'membre';
+  let channelName = `${category.prefix}-${safeName}`;
+  if (guild.channels.cache.some((c) => c.name === channelName)) {
+    channelName += `-${Math.random().toString(36).slice(2, 5)}`;
+  }
+
+  const overwrites = [
+    { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+    {
+      id: guild.members.me.id,
+      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels],
+    },
+  ];
+  if (adminRole) {
+    overwrites.push({ id: adminRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
+  }
+
+  const channel = await guild.channels
+    .create({
+      name: channelName,
+      type: ChannelType.GuildText,
+      parent: ticketCategory?.id,
+      topic: `Ticket ouvert par ${interaction.user.id} | catégorie : ${category.value}`,
+      permissionOverwrites: overwrites,
+    })
+    .catch(() => null);
+
+  if (!channel) {
+    await interaction.editReply('Impossible de créer le salon du ticket.');
+    return;
+  }
+
+  const welcomeEmbed = new EmbedBuilder()
+    .setColor(0x9b59b6)
+    .setTitle('🍸 Bienvenue au salon privé')
+    .setDescription(
+      `${category.emoji} **${category.label}**\n` +
+        "Explique-nous tout ici, un membre de l'équipe arrive vite. Une fois réglé, ferme ce salon avec le bouton ci-dessous."
+    );
+  const closeRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('nc_ticket_close').setLabel('Fermer le ticket').setStyle(ButtonStyle.Danger)
+  );
+  await channel.send({ content: `<@${interaction.user.id}>`, embeds: [welcomeEmbed], components: [closeRow] });
+
+  await interaction.editReply(`<a:1Kiss:1525528118352154674> Ticket créé : <#${channel.id}>`);
+}
+
+/** Clic sur "Fermer le ticket" : journalise puis supprime le salon. */
+async function handleTicketClose(interaction) {
+  await interaction.reply('<a:1Kiss:1525528118352154674> Fermeture du ticket en cours...');
+
+  const topic = interaction.channel.topic ?? '';
+  const openerMatch = topic.match(/(\d{17,20})/);
+  const openerId = openerMatch ? openerMatch[1] : null;
+
+  await logEvent(interaction.guild, {
+    title: 'Ticket fermé',
+    color: 0xff6600,
+    description: `**Salon :** ${interaction.channel.name}\n**Ouvert par :** ${openerId ? `<@${openerId}>` : 'inconnu'}\n**Fermé par :** <@${interaction.user.id}>`,
+  }).catch(() => {});
+
+  setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
 }
 
 /** +snipe [#salon] : affiche le dernier message supprimé de ce salon (ou du salon mentionné). */

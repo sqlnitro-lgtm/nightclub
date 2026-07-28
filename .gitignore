@@ -26,3 +26,6 @@ data/modLogConfig.json
 data/modLogHistory.json
 data/leashes.json
 data/lockAll.json
+data/linkedRoles.json
+data/photoSubmit.json
+data/approvedGuilds.json

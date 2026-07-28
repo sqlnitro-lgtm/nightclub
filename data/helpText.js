@@ -27,6 +27,7 @@ function buildHelpText(isAdmin) {
         "> **/role** / **/delrole** — Ajoute/retire un rôle à un membre.",
         "> **/blr** — Bascule le statut BLR (bloque l'attribution de rôle).",
         '> **/massrole** / **/massunrole** — Ajoute/retire un rôle à tous les membres.',
+        '> **=link \\<id\\> \\<id\\> [id] [id]** — Lie 2 à 4 rôles (attribuer l\'un attribue les autres ; un admin bot qui en retire un retire les autres).',
       ]),
       section('🔨', 'Sanctions', [
         '> **/mute** / **/unmute** — Mute manuel (rôle Muted), durée fixe ou indéfini.',
@@ -68,6 +69,10 @@ function buildHelpText(isAdmin) {
       section('👑', 'Administration', [
         '> **=admin \\<id\\>** (bascule, ou **=addmin**) — Donne le rôle Admin, ou le retire s\'il l\'a déjà.',
         '> **=admin** (sans id) — Liste tous les membres ayant le rôle Admin.',
+      ]),
+      section('🎫', 'Tickets & Soumissions', [
+        '> **=ticket** — Poste le panneau de tickets (Abus / Contrib-Partenariat / Contacter les admins).',
+        '> **=s&p [#salon]** (bascule) — Soumission de photos par MP (choix Homme/Femme, postée dans le salon configuré).',
       ])
     );
   }
