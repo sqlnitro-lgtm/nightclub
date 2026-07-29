@@ -124,6 +124,8 @@ const PRESENCE_REFRESH_MS = 10 * 60 * 1000;
 const PRESENCE_NAME = 'PRIVATE';
 const PRESENCE_DETAILS = 'PRIVATE';
 const PRESENCE_STATE = "pv bot t'interrese ? mp affow.";
+// Nom de l'Art Asset uploadée dans le Developer Portal (Rich Presence).
+const PRESENCE_ASSET = 'pv';
 // Réactions posées sur les photos reçues par MP (=s&p) : oui / non.
 const VOTE_UP_EMOJI = 'satoru:1529689009595486368';
 const VOTE_DOWN_EMOJI = 'a:white_girl:1528366482768269473';
@@ -275,15 +277,14 @@ function applyRichPresence() {
   const user = client.user;
   if (!user) return;
 
-  // La grande image passe par le proxy média de Discord ("mp:") pointé sur
-  // l'avatar du bot ; le .gif n'est correct que pour un avatar animé (a_...).
-  const avatarHash = user.avatar;
-  const assets = avatarHash
-    ? {
-        large_image: `mp:avatars/${user.id}/${avatarHash}.${avatarHash.startsWith('a_') ? 'gif' : 'png'}`,
-        large_text: PRESENCE_NAME,
-      }
-    : undefined;
+  // La grande image est une "Art Asset" de l'application (Developer Portal >
+  // Rich Presence > Art Assets), référencée par son nom. C'est la seule voie
+  // fiable pour un compte bot : un lien vers l'avatar via le proxy média
+  // ("mp:avatars/...") n'était pas rendu.
+  const assets = {
+    large_image: PRESENCE_ASSET,
+    large_text: PRESENCE_NAME,
+  };
 
   const payload = {
     op: 3, // PresenceUpdate
