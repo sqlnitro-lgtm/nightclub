@@ -71,7 +71,7 @@ function buildHelpText(isAdmin) {
       '**/move** · **/disconnect** — Déplace / déconnecte',
     ]),
     section('🎫', 'Tickets & photos', [
-      '**=ticket** — Poste le panneau de tickets',
+      '**=ticket** — Poste le panneau de tickets (archives dans #ticket-logs)',
       '**=s&p** `[#salon]` — Réception de photos par MP',
     ]),
     section('🐕', 'Divers', [

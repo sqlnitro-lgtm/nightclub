@@ -30,6 +30,7 @@ const {
   AuditLogEvent,
   Partials,
   ActivityType,
+  AttachmentBuilder,
 } = require('discord.js');
 
 const { isBlacklisted, addToBlacklist, removeFromBlacklist } = require('./data/blacklistStore');
@@ -87,6 +88,7 @@ const UI_PREFIX = '=ui';
 const pendingPhotoSubmissions = new Map();
 const TICKET_PREFIX = '=ticket';
 const TICKET_CATEGORY_NAME = 'tickets';
+const TICKET_LOGS_CHANNEL_NAME = 'ticket-logs';
 // Les emojis des boutons sont donnés sous forme d'objet { id, name, animated } :
 // c'est la seule façon d'utiliser un emoji personnalisé sur un bouton Discord.
 const TICKET_CATEGORIES = [
@@ -1813,19 +1815,132 @@ async function handleTicketClose(interaction) {
   // Accusé de réception silencieux : le message visible part du salon, pour
   // que les emojis personnalisés s'affichent (voir data/respond.js).
   await interaction.deferUpdate().catch(() => {});
-  await interaction.channel.send('<a:1Kiss:1525528118352154674> Fermeture du ticket en cours...').catch(() => {});
+  const channel = interaction.channel;
+  await channel.send('<a:1Kiss:1525528118352154674> Fermeture du ticket en cours...').catch(() => {});
 
-  const topic = interaction.channel.topic ?? '';
-  const openerMatch = topic.match(/(\d{17,20})/);
-  const openerId = openerMatch ? openerMatch[1] : null;
+  const topic = channel.topic ?? '';
+  const openerId = topic.match(/(\d{17,20})/)?.[1] ?? null;
+  const categoryValue = topic.match(/catégorie\s*:\s*(\w+)/)?.[1] ?? null;
+  const categoryLabel = TICKET_CATEGORIES.find((c) => c.value === categoryValue)?.label ?? 'inconnue';
 
+  // Le salon disparaît dans 3 s : on archive la conversation AVANT.
+  const messages = await fetchAllMessages(channel);
+  const transcript = buildTranscriptHtml(channel, messages);
+
+  const logChannel = await ensureTicketLogsChannel(interaction.guild);
+  if (logChannel) {
+    const embed = new EmbedBuilder()
+      .setColor(0xff6600)
+      .setTitle('🎫 Ticket fermé')
+      .setDescription(
+        `**Salon :** ${channel.name}\n` +
+          `**Catégorie :** ${categoryLabel}\n` +
+          `**Ouvert par :** ${openerId ? `<@${openerId}>` : 'inconnu'}\n` +
+          `**Fermé par :** <@${interaction.user.id}>\n` +
+          `**Messages archivés :** ${messages.length}`
+      )
+      .setTimestamp();
+
+    const file = new AttachmentBuilder(Buffer.from(transcript, 'utf8'), { name: `${channel.name}.html` });
+    await logChannel.send({ embeds: [embed], files: [file] }).catch((err) => console.error('[ticket] Log impossible :', err.message));
+  }
+
+  // En plus du salon dédié, on trace l'action dans le salon de logs général
+  // s'il est configuré (/logs) — sans transcript, juste la trace.
   await logEvent(interaction.guild, {
     title: 'Ticket fermé',
     color: 0xff6600,
-    description: `**Salon :** ${interaction.channel.name}\n**Ouvert par :** ${openerId ? `<@${openerId}>` : 'inconnu'}\n**Fermé par :** <@${interaction.user.id}>`,
+    description: `**Salon :** ${channel.name}\n**Ouvert par :** ${openerId ? `<@${openerId}>` : 'inconnu'}\n**Fermé par :** <@${interaction.user.id}>`,
   }).catch(() => {});
 
-  setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
+  setTimeout(() => channel.delete().catch(() => {}), 3000);
+}
+
+/** Salon d'archives des tickets, créé au besoin (privé, dans la catégorie des tickets). */
+async function ensureTicketLogsChannel(guild) {
+  const existing = guild.channels.cache.find((c) => c.name === TICKET_LOGS_CHANNEL_NAME && c.type === ChannelType.GuildText);
+  if (existing) return existing;
+
+  const parent = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name.toLowerCase().includes('ticket'));
+  const adminRole = guild.roles.cache.find((r) => r.name === ADMIN_ROLE_NAME);
+
+  const overwrites = [
+    { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+    { id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
+  ];
+  if (adminRole) {
+    overwrites.push({ id: adminRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] });
+  }
+
+  return guild.channels
+    .create({
+      name: TICKET_LOGS_CHANNEL_NAME,
+      type: ChannelType.GuildText,
+      parent: parent?.id,
+      permissionOverwrites: overwrites,
+      reason: 'Archives des tickets',
+    })
+    .catch((err) => {
+      console.error('[ticket] Salon de logs impossible à créer :', err.message);
+      return null;
+    });
+}
+
+/** Tout l'historique d'un salon, du plus ancien au plus récent (par lots de 100). */
+async function fetchAllMessages(channel) {
+  const all = [];
+  let before;
+
+  // Garde-fou : 20 lots = 2000 messages, largement au-delà d'un ticket normal.
+  for (let i = 0; i < 20; i++) {
+    const batch = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) }).catch(() => null);
+    if (!batch || batch.size === 0) break;
+    all.push(...batch.values());
+    before = batch.last().id;
+    if (batch.size < 100) break;
+  }
+
+  return all.reverse();
+}
+
+function escapeHtml(text) {
+  return String(text ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Transcript HTML lisible du ticket, aux couleurs de Discord. */
+function buildTranscriptHtml(channel, messages) {
+  const rows = messages
+    .map((m) => {
+      const date = new Date(m.createdTimestamp).toLocaleString('fr-FR');
+      const files = m.attachments.map((a) => `<div class="file"><a href="${escapeHtml(a.url)}">${escapeHtml(a.name)}</a></div>`).join('');
+      const embeds = m.embeds.length ? `<div class="meta">[${m.embeds.length} embed(s)]</div>` : '';
+      const body = m.content ? `<div class="content">${escapeHtml(m.content).replace(/\n/g, '<br>')}</div>` : '';
+      return `<div class="msg"><div class="head"><span class="author">${escapeHtml(m.author?.tag ?? 'Inconnu')}</span><span class="date">${escapeHtml(date)}</span></div>${body}${files}${embeds}</div>`;
+    })
+    .join('\n');
+
+  return `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Ticket ${escapeHtml(channel.name)}</title>
+<style>
+body{background:#313338;color:#dbdee1;font-family:"gg sans",system-ui,sans-serif;margin:0;padding:24px}
+h1{color:#fff;font-size:20px;margin:0 0 4px}
+.sub{color:#949ba4;font-size:13px;margin-bottom:24px}
+.msg{padding:8px 12px;border-radius:6px;margin-bottom:4px;background:#2b2d31}
+.head{display:flex;gap:10px;align-items:baseline;margin-bottom:2px}
+.author{color:#f2f3f5;font-weight:600}
+.date{color:#949ba4;font-size:12px}
+.content{white-space:pre-wrap;word-break:break-word}
+.file a{color:#00a8fc;text-decoration:none}
+.meta{color:#949ba4;font-size:12px;font-style:italic}
+</style></head><body>
+<h1>Ticket #${escapeHtml(channel.name)}</h1>
+<div class="sub">${messages.length} message(s) — archivé le ${escapeHtml(new Date().toLocaleString('fr-FR'))}</div>
+${rows || '<div class="meta">Aucun message.</div>'}
+</body></html>`;
 }
 
 /** +snipe [#salon] : affiche le dernier message supprimé de ce salon (ou du salon mentionné). */
