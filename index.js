@@ -123,7 +123,6 @@ const DISCORD_CREATION_TS = Date.UTC(2015, 4, 13); // 13 mai 2015, sortie de Dis
 const PRESENCE_REFRESH_MS = 10 * 60 * 1000;
 const PRESENCE_NAME = 'PRIVATE';
 const PRESENCE_DETAILS = 'PRIVATE';
-const PRESENCE_STATE = "pv bot t'interrese ? mp affow.";
 // Nom de l'Art Asset uploadée dans le Developer Portal (Rich Presence).
 const PRESENCE_ASSET = 'pv';
 // Réactions posées sur les photos reçues par MP (=s&p) : oui / non.
@@ -298,7 +297,6 @@ function applyRichPresence() {
           type: 3, // Watching -> "Regarde ..."
           application_id: user.id,
           details: PRESENCE_DETAILS,
-          state: PRESENCE_STATE,
           timestamps: { start: DISCORD_CREATION_TS },
           ...(assets ? { assets } : {}),
         },
