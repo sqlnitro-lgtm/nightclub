@@ -121,8 +121,8 @@ const ADMIN_ROLE_NAME = 'Admin';
 const CHECK_INTERVAL_MS = 60 * 1000; // vérifie les mutes/tempbans expirés toutes les minutes
 const DISCORD_CREATION_TS = Date.UTC(2015, 4, 13); // 13 mai 2015, sortie de Discord
 const PRESENCE_REFRESH_MS = 10 * 60 * 1000;
-const PRESENCE_NAME = 'PRIVATE';
-const PRESENCE_DETAILS = 'PRIVATE';
+const PRESENCE_NAME = 'PV';
+const PRESENCE_DETAILS = 'PV';
 // Nom de l'Art Asset uploadée dans le Developer Portal (Rich Presence).
 const PRESENCE_ASSET = 'pv';
 // Réactions posées sur les photos reçues par MP (=s&p) : oui / non.
