@@ -89,6 +89,11 @@ const pendingPhotoSubmissions = new Map();
 const TICKET_PREFIX = '=ticket';
 const TICKET_CATEGORY_NAME = 'tickets';
 const TICKET_LOGS_CHANNEL_NAME = 'ticket-logs';
+// Emojis des logs de tickets (serveur +protect), comme sur Airline.
+const E_CHECK = '<a:noeudbleu:1526275226613317693>';
+const E_TICKET = '<:billetnitro:1527776865308246066>';
+const E_WL = '<:neonwhitestar:1525583096450121879>';
+const E_ADMIN = '<:admin:1529211069472440540>';
 // Les emojis des boutons sont donnés sous forme d'objet { id, name, animated } :
 // c'est la seule façon d'utiliser un emoji personnalisé sur un bouton Discord.
 const TICKET_CATEGORIES = [
@@ -190,7 +195,7 @@ async function requestGuildApproval(guild) {
 
   const embed = new EmbedBuilder()
     .setColor(0x9b59b6)
-    .setTitle('🍸 Nouvelle demande d\'accès')
+    .setTitle(`${E_TICKET} Nouvelle demande d'accès`)
     .setDescription(
       `**Serveur :** ${guild.name} (\`${guild.id}\`)\n` +
         `**Membres :** ${guild.memberCount}\n` +
@@ -634,12 +639,15 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // Automod (=automod / =mod) : supprime les messages contenant un mot
-  // interdit, contournements compris. Les admins ne sont pas filtrés.
-  if (await enforceAutomod(message)) return;
-
   const content = message.content.trim();
   const lower = content.toLowerCase();
+
+  // Automod (=automod / =mod) : supprime les messages contenant un mot
+  // interdit, contournements compris, sans exception de personne.
+  // Seule "=mod <mot>" y échappe — sinon la commande qui sert à gérer la
+  // liste serait supprimée avant de s'exécuter, rendant le mot impossible
+  // à retirer. Le message est effacé quand même par handleMod.
+  if (!lower.startsWith(`${MOD_PREFIX} `) && (await enforceAutomod(message))) return;
 
   if (lower.startsWith(MV_PREFIX)) {
     await handleMv(message, content.slice(MV_PREFIX.length).trim()).catch((err) => console.error('[mv] Erreur :', err.message));
@@ -736,13 +744,14 @@ client.on('messageCreate', async (message) => {
 
 /**
  * Applique l'automod : supprime le message s'il contient un mot interdit.
- * Retourne true si le message a été supprimé. Les admins bot en sont exemptés.
+ * Retourne true si le message a été supprimé. S'applique à TOUT LE MONDE,
+ * propriétaire du bot et administrateurs compris.
  */
 async function enforceAutomod(message) {
   if (!message.content) return false;
-  if (isOwner(message.author.id)) return false;
-  if (message.member?.permissions.has(PermissionFlagsBits.Administrator)) return false;
 
+  // Aucune exemption, volontairement : ni le propriétaire du bot, ni les
+  // administrateurs du serveur. Ces mots-là ne passent pour personne.
   const banned = automod.findBannedWord(message.guild.id, message.content);
   if (!banned) return false;
 
@@ -1603,6 +1612,10 @@ async function handleAutomod(message) {
 async function handleMod(message, rawArgs) {
   if (!(await requireAdminMessage(message))) return;
 
+  // La commande contient forcément le mot interdit : on efface le message
+  // une fois traité, pour qu'il ne reste pas affiché dans le salon.
+  if (rawArgs) await message.delete().catch(() => {});
+
   const { enabled, words } = automod.getConfig(message.guild.id);
 
   if (!rawArgs) {
@@ -1816,7 +1829,7 @@ async function handleTicketClose(interaction) {
   // que les emojis personnalisés s'affichent (voir data/respond.js).
   await interaction.deferUpdate().catch(() => {});
   const channel = interaction.channel;
-  await channel.send('<a:1Kiss:1525528118352154674> Fermeture du ticket en cours...').catch(() => {});
+  await channel.send(`${E_CHECK} Fermeture du ticket en cours...`).catch(() => {});
 
   const topic = channel.topic ?? '';
   const openerId = topic.match(/(\d{17,20})/)?.[1] ?? null;
@@ -1830,19 +1843,31 @@ async function handleTicketClose(interaction) {
   const logChannel = await ensureTicketLogsChannel(interaction.guild);
   if (logChannel) {
     const embed = new EmbedBuilder()
-      .setColor(0xff6600)
-      .setTitle('🎫 Ticket fermé')
-      .setDescription(
-        `**Salon :** ${channel.name}\n` +
-          `**Catégorie :** ${categoryLabel}\n` +
-          `**Ouvert par :** ${openerId ? `<@${openerId}>` : 'inconnu'}\n` +
-          `**Fermé par :** <@${interaction.user.id}>\n` +
-          `**Messages archivés :** ${messages.length}`
+      .setColor(0x5865f2)
+      .setTitle(`${E_TICKET} **__Logs Ticket__** | Ticket supprimé`)
+      .addFields(
+        { name: `${E_WL} Créateur`, value: openerId ? `<@${openerId}>` : 'Inconnu', inline: true },
+        { name: `${E_ADMIN} Supprimé par`, value: `<@${interaction.user.id}>`, inline: true },
+        { name: `${E_TICKET} Ticket`, value: channel.name, inline: true },
+        { name: `${E_ADMIN} Catégorie`, value: categoryLabel, inline: true },
+        { name: `${E_CHECK} Messages archivés`, value: String(messages.length), inline: true }
       )
       .setTimestamp();
 
-    const file = new AttachmentBuilder(Buffer.from(transcript, 'utf8'), { name: `${channel.name}.html` });
-    await logChannel.send({ embeds: [embed], files: [file] }).catch((err) => console.error('[ticket] Log impossible :', err.message));
+    const file = new AttachmentBuilder(Buffer.from(transcript, 'utf8'), { name: `transcript-${channel.id}.html` });
+    const sent = await logChannel.send({ embeds: [embed], files: [file] }).catch((err) => {
+      console.error('[ticket] Log impossible :', err.message);
+      return null;
+    });
+
+    // L'URL de la pièce jointe n'existe qu'une fois le message envoyé : on
+    // ajoute ensuite le lien cliquable (le fichier reste téléchargeable
+    // normalement, ce champ n'est qu'un raccourci).
+    const fileUrl = sent?.attachments.first()?.url;
+    if (fileUrl) {
+      embed.addFields({ name: `${E_CHECK} Transcript`, value: `[Cliquer pour consulter / télécharger](${fileUrl})` });
+      await sent.edit({ embeds: [embed] }).catch(() => {});
+    }
   }
 
   // En plus du salon dédié, on trace l'action dans le salon de logs général
