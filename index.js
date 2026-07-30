@@ -45,7 +45,7 @@ const { getLeash } = require('./data/leashStore');
 const { canModerate } = require('./data/hierarchyHelper');
 const { addWarn, getWarns, removeWarn } = require('./data/warnStore');
 const { getLockAll, setLockAll, clearLockAll } = require('./data/lockAllStore');
-const { getLinkedGroups, addLinkedGroup } = require('./data/linkedRolesStore');
+const { getLinkedGroups, toggleLinkedGroup } = require('./data/linkedRolesStore');
 const {
   getChannelId: getSpChannelId,
   getAllActive: getSpActive,
@@ -123,8 +123,6 @@ const DISCORD_CREATION_TS = Date.UTC(2015, 4, 13); // 13 mai 2015, sortie de Dis
 const PRESENCE_REFRESH_MS = 10 * 60 * 1000;
 const PRESENCE_NAME = 'PV';
 const PRESENCE_DETAILS = 'PV';
-// Nom de l'Art Asset uploadée dans le Developer Portal (Rich Presence).
-const PRESENCE_ASSET = 'pv';
 // Réactions posées sur les photos reçues par MP (=s&p) : oui / non.
 const VOTE_UP_EMOJI = 'satoru:1529689009595486368';
 const VOTE_DOWN_EMOJI = 'a:white_girl:1528366482768269473';
@@ -271,19 +269,24 @@ client.on('guildCreate', async (guild) => {
  * recopie que `type`, `name`, `state` et `url` dans le paquet, et jette
  * silencieusement `timestamps`, `details` et `assets` — donc ni image ni
  * chronomètre. Ici on écrit le paquet nous-mêmes.
+ *
+ * Les Art Assets uploadées dans le Developer Portal NE fonctionnent PAS
+ * pour un compte bot (seulement pour le Rich Presence RPC d'un compte
+ * utilisateur) — d'où le "pv" essayé précédemment qui restait invisible.
+ * `large_image` accepte en revanche une URL externe directe : on pointe
+ * simplement sur l'avatar du bot via le CDN Discord.
  */
 function applyRichPresence() {
   const user = client.user;
   if (!user) return;
 
-  // La grande image est une "Art Asset" de l'application (Developer Portal >
-  // Rich Presence > Art Assets), référencée par son nom. C'est la seule voie
-  // fiable pour un compte bot : un lien vers l'avatar via le proxy média
-  // ("mp:avatars/...") n'était pas rendu.
-  const assets = {
-    large_image: PRESENCE_ASSET,
-    large_text: PRESENCE_NAME,
-  };
+  const avatarHash = user.avatar;
+  const assets = avatarHash
+    ? {
+        large_image: `https://cdn.discordapp.com/avatars/${user.id}/${avatarHash}.${avatarHash.startsWith('a_') ? 'gif' : 'png'}?size=512`,
+        large_text: PRESENCE_NAME,
+      }
+    : undefined;
 
   const payload = {
     op: 3, // PresenceUpdate
@@ -1477,9 +1480,30 @@ async function handleChannelModal(interaction) {
   }
 }
 
-/** =link <id/@rôle> <id/@rôle> [id/@rôle] [id/@rôle] : lie 2 à 4 rôles ensemble (voir handleLinkedRoles). */
+/**
+ * =link : sans argument, affiche les groupes de rôles liés du serveur.
+ * =link <id/@rôle> <id/@rôle> [id/@rôle] [id/@rôle] : bascule un groupe de
+ * 2 à 4 rôles — relancer avec exactement les mêmes rôles le retire (voir
+ * data/linkedRolesStore.js, handleLinkedRoles).
+ */
 async function handleLink(message, rawArgs) {
   if (!(await requireAdminMessage(message))) return;
+
+  if (!rawArgs) {
+    const groups = getLinkedGroups(message.guild.id);
+    if (groups.length === 0) {
+      await message.channel.send(`Aucun rôle lié sur ce serveur. Usage : \`${LINK_PREFIX} <id/@rôle> <id/@rôle> [id/@rôle] [id/@rôle]\`.`);
+      return;
+    }
+
+    const lines = groups.map((group, i) => `**${i + 1}.** ${group.map((id) => `<@&${id}>`).join(' ↔ ')}`);
+    const embed = new EmbedBuilder()
+      .setColor(0x9b59b6)
+      .setTitle(`🔗 Rôles liés (${groups.length})`)
+      .setDescription(lines.join('\n'));
+    await message.channel.send({ embeds: [embed] });
+    return;
+  }
 
   const roleIds = [...new Set(rawArgs.match(/\d{17,20}/g) ?? [])];
   if (roleIds.length < 2 || roleIds.length > 4) {
@@ -1497,9 +1521,12 @@ async function handleLink(message, rawArgs) {
     roles.push(role);
   }
 
-  addLinkedGroup(message.guild.id, roleIds);
+  const { linked } = toggleLinkedGroup(message.guild.id, roleIds);
+  const list = roles.map((r) => `<@&${r.id}>`).join(', ');
   await message.channel.send(
-    `<a:1Kiss:1525528118352154674> Rôles liés : ${roles.map((r) => `<@&${r.id}>`).join(', ')} — en attribuer un attribue les autres ; un admin bot qui en retire un retire les autres.`
+    linked
+      ? `<a:1Kiss:1525528118352154674> Rôles liés : ${list} — en attribuer un attribue les autres ; un admin bot qui en retire un retire les autres.`
+      : `<a:1Kiss:1525528118352154674> Rôles déliés : ${list} — ils ne se propagent plus entre eux.`
   );
 }
 

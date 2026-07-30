@@ -28,11 +28,33 @@ function getLinkedGroups(guildId) {
   return load()[guildId] ?? [];
 }
 
-function addLinkedGroup(guildId, roleIds) {
-  const all = load();
-  if (!all[guildId]) all[guildId] = [];
-  all[guildId].push(roleIds);
-  save(all);
+/** Deux groupes sont "le même" si ce sont exactement les mêmes rôles, peu importe l'ordre. */
+function sameGroup(a, b) {
+  if (a.length !== b.length) return false;
+  const setB = new Set(b);
+  return a.every((id) => setB.has(id));
 }
 
-module.exports = { getLinkedGroups, addLinkedGroup };
+/**
+ * Bascule un groupe de rôles : s'il existe déjà (mêmes rôles, ordre libre),
+ * il est retiré ; sinon il est ajouté. Retourne { linked: bool }.
+ */
+function toggleLinkedGroup(guildId, roleIds) {
+  const all = load();
+  const groups = all[guildId] ?? [];
+
+  const idx = groups.findIndex((g) => sameGroup(g, roleIds));
+  if (idx === -1) {
+    groups.push(roleIds);
+    all[guildId] = groups;
+    save(all);
+    return { linked: true };
+  }
+
+  groups.splice(idx, 1);
+  all[guildId] = groups;
+  save(all);
+  return { linked: false };
+}
+
+module.exports = { getLinkedGroups, toggleLinkedGroup };
