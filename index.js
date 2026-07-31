@@ -31,6 +31,9 @@ const {
   Partials,
   ActivityType,
   AttachmentBuilder,
+  StringSelectMenuBuilder,
+  RoleSelectMenuBuilder,
+  ComponentType,
 } = require('discord.js');
 
 const { isBlacklisted, addToBlacklist, removeFromBlacklist } = require('./data/blacklistStore');
@@ -46,6 +49,7 @@ const { canModerate } = require('./data/hierarchyHelper');
 const { addWarn, getWarns, removeWarn } = require('./data/warnStore');
 const { getLockAll, setLockAll, clearLockAll } = require('./data/lockAllStore');
 const { getLinkedGroups, toggleLinkedGroup } = require('./data/linkedRolesStore');
+const { getTicketRoles, setTicketRoles } = require('./data/ticketRolesStore');
 const {
   getChannelId: getSpChannelId,
   getAllActive: getSpActive,
@@ -727,7 +731,11 @@ client.on('messageCreate', async (message) => {
       await handleSp(message, restArgs).catch((err) => console.error('[sp] Erreur :', err.message));
       return;
     case TICKET_PREFIX:
-      await handleTicketPanel(message).catch((err) => console.error('[ticket] Erreur :', err.message));
+      if (restArgs.toLowerCase() === 'roles' || restArgs.toLowerCase() === 'role') {
+        await manageTicketRoles(message).catch((err) => console.error('[ticket-roles] Erreur :', err.message));
+      } else {
+        await handleTicketPanel(message).catch((err) => console.error('[ticket] Erreur :', err.message));
+      }
       return;
     case AUTOMOD_PREFIX:
       await handleAutomod(message).catch((err) => console.error('[automod] Erreur :', err.message));
@@ -1782,6 +1790,109 @@ async function handleTicketPanel(message) {
   await message.channel.send({ embeds: [embed], components: [row] });
 }
 
+/**
+ * =ticket roles : menu pour choisir, catégorie par catégorie, quels rôles
+ * voient et sont mentionnés pour ce type de ticket. Choix de la catégorie
+ * (menu texte) puis des rôles (menu de rôles natif) ; auto-collecté sur le
+ * message posté, sans passer par le routeur global d'interactions.
+ */
+async function manageTicketRoles(message) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const describe = (categoryValue) => {
+    const roleIds = getTicketRoles(message.guild.id, categoryValue);
+    return roleIds.length === 0 ? 'aucun rôle — créateur + Admin seulement' : `${roleIds.length} rôle(s)`;
+  };
+
+  const categoryMenu = new StringSelectMenuBuilder()
+    .setCustomId('ticketroles_category')
+    .setPlaceholder('Catégorie de ticket à configurer')
+    .addOptions(
+      TICKET_CATEGORIES.map((c) => ({
+        label: c.label.slice(0, 100),
+        value: c.value,
+        description: describe(c.value).slice(0, 100),
+        emoji: c.emoji,
+      }))
+    );
+
+  const summary = TICKET_CATEGORIES.map((c) => {
+    const roleIds = getTicketRoles(message.guild.id, c.value);
+    const roles = roleIds.length ? roleIds.map((r) => `<@&${r}>`).join(' ') : '*créateur + Admin seulement*';
+    return `**${c.label}** — ${roles}`;
+  }).join('\n');
+
+  const embed = new EmbedBuilder()
+    .setColor(0x9b59b6)
+    .setTitle('Accès aux tickets par catégorie')
+    .setDescription(`${summary}\n\nChoisis une catégorie pour modifier ses rôles.`)
+    .setFooter({ text: 'Les rôles choisis voient le ticket et sont mentionnés à son ouverture.' });
+
+  const panel = await message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(categoryMenu)] });
+
+  const collector = panel.createMessageComponentCollector({ time: 5 * 60 * 1000 });
+  let currentCategory = null;
+
+  collector.on('collect', async (i) => {
+    if (i.user.id !== message.author.id) {
+      await i.reply({ content: "Seul l'auteur de la commande peut configurer.", ephemeral: true }).catch(() => {});
+      return;
+    }
+
+    try {
+      if (i.componentType === ComponentType.StringSelect && i.customId === 'ticketroles_category') {
+        currentCategory = i.values[0];
+        const category = TICKET_CATEGORIES.find((c) => c.value === currentCategory);
+        const current = getTicketRoles(message.guild.id, currentCategory);
+
+        const roleMenu = new RoleSelectMenuBuilder()
+          .setCustomId('ticketroles_roles')
+          .setPlaceholder('Rôles ayant accès (aucun = créateur + Admin seulement)')
+          .setMinValues(0)
+          .setMaxValues(10);
+
+        await i.update({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x9b59b6)
+              .setTitle(`Accès — ${category.label}`)
+              .setDescription(current.length ? `Actuellement : ${current.map((r) => `<@&${r}>`).join(' ')}` : 'Actuellement : *créateur + Admin seulement*')
+              .setFooter({ text: 'Sélectionne les rôles. Ne rien choisir remet à zéro.' }),
+          ],
+          components: [new ActionRowBuilder().addComponents(roleMenu)],
+        });
+        return;
+      }
+
+      if (i.customId === 'ticketroles_roles' && currentCategory) {
+        const category = TICKET_CATEGORIES.find((c) => c.value === currentCategory);
+        setTicketRoles(message.guild.id, currentCategory, i.values);
+
+        await i.update({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(0x9b59b6)
+              .setTitle(`<a:1Kiss:1525528118352154674> Accès enregistré — ${category.label}`)
+              .setDescription(
+                i.values.length
+                  ? `${i.values.map((r) => `<@&${r}>`).join(' ')}\n\nCes rôles verront le ticket et seront mentionnés à son ouverture.`
+                  : 'Aucun rôle : seuls le créateur et le rôle Admin verront ce ticket.'
+              ),
+          ],
+          components: [],
+        });
+        collector.stop('done');
+      }
+    } catch (err) {
+      console.error('[ticket-roles] Configuration :', err.message);
+    }
+  });
+
+  collector.on('end', (_collected, reason) => {
+    if (reason !== 'done') panel.edit({ components: [] }).catch(() => {});
+  });
+}
+
 /** Clic sur une catégorie du panneau =ticket : crée un salon privé pour ce ticket. */
 async function handleTicketButton(interaction) {
   const category = TICKET_CATEGORIES.find((c) => c.value === interaction.customId.split(':')[1]);
@@ -1819,6 +1930,17 @@ async function handleTicketButton(interaction) {
     overwrites.push({ id: adminRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
   }
 
+  // Rôles configurés pour cette catégorie (=ticket roles). Les rôles
+  // supprimés du serveur depuis sont ignorés : une surcharge sur un ID
+  // inexistant ferait échouer la création du salon entier. Le rôle Admin,
+  // déjà ajouté juste au-dessus, n'est pas dupliqué s'il est aussi choisi ici.
+  const configuredRoleIds = getTicketRoles(guild.id, category.value).filter(
+    (roleId) => roleId !== adminRole?.id && guild.roles.cache.has(roleId)
+  );
+  for (const roleId of configuredRoleIds) {
+    overwrites.push({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
+  }
+
   const channel = await guild.channels
     .create({
       name: channelName,
@@ -1844,7 +1966,17 @@ async function handleTicketButton(interaction) {
   const closeRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('nc_ticket_close').setLabel('Fermer le ticket').setStyle(ButtonStyle.Danger)
   );
-  await channel.send({ content: `<@${interaction.user.id}>`, embeds: [welcomeEmbed], components: [closeRow] });
+
+  // Mentionne le membre ET les rôles configurés pour cette catégorie.
+  // allowedMentions explicite : sans lui, Discord bloque par défaut la
+  // notification des rôles non "mentionnables", et personne ne serait prévenu.
+  const pings = [`<@${interaction.user.id}>`, ...configuredRoleIds.map((roleId) => `<@&${roleId}>`)].join(' ');
+  await channel.send({
+    content: pings,
+    embeds: [welcomeEmbed],
+    components: [closeRow],
+    allowedMentions: { users: [interaction.user.id], roles: configuredRoleIds },
+  });
 
   await interaction.editReply(`Ticket créé : <#${channel.id}>`);
 }
