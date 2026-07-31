@@ -72,6 +72,8 @@ const FOLLOW_PREFIX = '=follow';
 const WARN_PREFIX = '&warn';
 const UNWARN_PREFIX = '&unwarn';
 const WL_PREFIX = '&wl';
+const BL_PREFIX = '&bl';
+const UNBL_PREFIX = '&unbl';
 const LOCK_PREFIX = '&lock';
 const UNLOCK_PREFIX = '&unlock';
 const L0ALL_PREFIX = '&l0all';
@@ -690,6 +692,12 @@ client.on('messageCreate', async (message) => {
       return;
     case WL_PREFIX:
       await handleWl(message, restArgs).catch((err) => console.error('[wl] Erreur :', err.message));
+      return;
+    case BL_PREFIX:
+      await handleBl(message, restArgs).catch((err) => console.error('[bl] Erreur :', err.message));
+      return;
+    case UNBL_PREFIX:
+      await handleUnbl(message, restArgs).catch((err) => console.error('[unbl] Erreur :', err.message));
       return;
     case L0ALL_PREFIX:
       await handleL0all(message).catch((err) => console.error('[l0all] Erreur :', err.message));
