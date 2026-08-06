@@ -34,6 +34,11 @@ const {
   StringSelectMenuBuilder,
   RoleSelectMenuBuilder,
   ComponentType,
+  MessageFlags,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SectionBuilder,
+  SeparatorBuilder,
 } = require('discord.js');
 
 const { isBlacklisted, addToBlacklist, removeFromBlacklist } = require('./data/blacklistStore');
@@ -95,6 +100,8 @@ const pendingPhotoSubmissions = new Map();
 const TICKET_PREFIX = '=ticket';
 const TICKET_CATEGORY_NAME = 'tickets';
 const TICKET_LOGS_CHANNEL_NAME = 'ticket-logs';
+const V2_PREFIX = '=v2';
+const V1_PREFIX = '=v1';
 // Emojis des logs de tickets (serveur +protect), comme sur Airline.
 const E_CHECK = '<a:noeudbleu:1526275226613317693>';
 const E_TICKET = '<:billetnitro:1527776865308246066>';
@@ -107,18 +114,21 @@ const TICKET_CATEGORIES = [
     value: 'admin',
     prefix: 'admin',
     label: 'Contacter les Admin',
+    description: 'Tu as besoin de renseignements ?',
     emoji: { id: '1528368212528336946', name: 'Wcrown', animated: true },
   },
   {
     value: 'contrib',
     prefix: 'contrib',
     label: 'Partenariat',
+    description: "Tu souhaite contribuer / fusionner afin d'aider au développement ?",
     emoji: { id: '1526714684600750090', name: 'partner', animated: false },
   },
   {
     value: 'abus',
     prefix: 'abus',
     label: 'Abus',
+    description: "Tu souhaite te plaindre d'un abus !",
     emoji: { id: '1525532083366137917', name: 'hkexc', animated: false },
   },
 ];
@@ -744,6 +754,12 @@ client.on('messageCreate', async (message) => {
       } else {
         await handleTicketPanel(message).catch((err) => console.error('[ticket] Erreur :', err.message));
       }
+      return;
+    case V1_PREFIX:
+      await manageVersionPanneau(message, false).catch((err) => console.error('[v1] Erreur :', err.message));
+      return;
+    case V2_PREFIX:
+      await manageVersionPanneau(message, true).catch((err) => console.error('[v2] Erreur :', err.message));
       return;
     case AUTOMOD_PREFIX:
       await handleAutomod(message).catch((err) => console.error('[automod] Erreur :', err.message));
@@ -1776,9 +1792,8 @@ function formatEmoji(emoji) {
   return `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>`;
 }
 
-async function handleTicketPanel(message) {
-  if (!(await requireAdminMessage(message))) return;
-
+/** Panneau de ticket, version 1 (actuelle) : embed classique, boutons en rangée dessous. */
+function buildTicketPanelV1() {
   const embed = new EmbedBuilder()
     .setColor(0x9b59b6)
     .setDescription(
@@ -1795,7 +1810,226 @@ async function handleTicketPanel(message) {
     )
   );
 
-  await message.channel.send({ embeds: [embed], components: [row] });
+  return { embeds: [embed], components: [row] };
+}
+
+/**
+ * Panneau de ticket, version 2 : chaque catégorie est une Section avec SON
+ * bouton posé à sa droite — on lit une ligne, on clique juste à côté, au
+ * lieu de lire la description puis chercher le bon bouton plus bas.
+ *
+ * Un message V2 ne porte ni `content` ni `embeds` (le titre devient du
+ * texte, en `##`). Les customId sont identiques à la V1 : un panneau déjà
+ * posté dans l'autre version reste cliquable.
+ */
+function buildTicketPanelV2() {
+  const conteneur = new ContainerBuilder().setAccentColor(0x9b59b6);
+
+  conteneur.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent('## <a:Wcrown:1528368212528336946> TICKET PV POUR LE MEILLEUR SERVEUR PV !')
+  );
+
+  for (const cat of TICKET_CATEGORIES) {
+    conteneur.addSeparatorComponents(new SeparatorBuilder());
+    conteneur.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`**${formatEmoji(cat.emoji)} ${cat.label}**\n${cat.description}`))
+        .setButtonAccessory(new ButtonBuilder().setCustomId(`nc_ticket:${cat.value}`).setLabel('Ouvrir').setStyle(ButtonStyle.Secondary))
+    );
+  }
+
+  conteneur.addSeparatorComponents(new SeparatorBuilder());
+  conteneur.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent('-# <a:hkhi:1525582949708468374> Pousse la bonne porte ci-dessus et l\'équipe s\'occupe de toi.')
+  );
+
+  return { components: [conteneur], flags: MessageFlags.IsComponentsV2 };
+}
+
+async function handleTicketPanel(message) {
+  if (!(await requireAdminMessage(message))) return;
+  await message.channel.send(buildTicketPanelV1());
+}
+
+// --------------------------------------------------------------------
+// Commandes =v1 et =v2 : rebasculent un panneau déjà posté d'une
+// présentation à l'autre.
+//
+// Trois façons de désigner le panneau, de la plus précise à la plus
+// large : répondre au message, donner son ID (`=v2 123456789`), ou taper
+// la commande seule — un seul panneau trouvé dans le salon est converti
+// directement, plusieurs ouvrent un menu de choix.
+//
+// Un panneau est reconnu à ses customId (nc_ticket:) et pas à son texte :
+// le texte se modifie dans le code, les customId non — ce sont eux qui
+// font marcher les boutons.
+// --------------------------------------------------------------------
+const PANNEAUX_VERSIONNES = {
+  ticket: {
+    label: 'Panneau de ticket',
+    prefixe: 'nc_ticket:',
+    build: (v2) => (v2 ? buildTicketPanelV2() : buildTicketPanelV1()),
+  },
+};
+
+/** Le type de panneau que porte ce message, ou null si ce n'en est pas un. */
+function identifierPanneau(message) {
+  const customIds = [];
+  for (const rangee of message.components ?? []) {
+    for (const composant of rangee.components ?? []) {
+      if (composant.customId) customIds.push(composant.customId);
+      if (composant.accessory?.customId) customIds.push(composant.accessory.customId);
+    }
+  }
+  if (customIds.length === 0) return null;
+
+  for (const [type, panneau] of Object.entries(PANNEAUX_VERSIONNES)) {
+    if (customIds.some((id) => id.startsWith(panneau.prefixe))) return type;
+  }
+  return null;
+}
+
+/** Ce message est-il déjà en Components V2 ? */
+function estEnV2(message) {
+  return Boolean(message.flags?.has?.(MessageFlags.IsComponentsV2));
+}
+
+/**
+ * Bascule un panneau vers `versV2`.
+ *
+ * Aller vers la V2 se fait par édition, en vidant contenu et embeds :
+ * Discord accepte d'AJOUTER le drapeau, mais refuse un message V2 qui
+ * garderait un embed.
+ *
+ * Le retour en V1 ne peut pas se faire par édition — Discord refuse de
+ * RETIRER le drapeau. Il faut donc reposter puis supprimer l'ancien, et
+ * le panneau change de place dans le salon. On reposte avant de
+ * supprimer : si l'envoi échoue, l'ancien est toujours là.
+ *
+ * @returns {Promise<{repostee: boolean}>}
+ */
+async function basculerPanneau(message, type, versV2) {
+  const payload = PANNEAUX_VERSIONNES[type].build(versV2);
+
+  if (versV2) {
+    await message.edit({ content: '', embeds: [], ...payload });
+    return { repostee: false };
+  }
+
+  if (!estEnV2(message)) {
+    await message.edit({ content: '', ...payload });
+    return { repostee: false };
+  }
+
+  await message.channel.send(payload);
+  await message.delete().catch(() => {});
+  return { repostee: true };
+}
+
+/** Message ciblé : réponse, puis ID en argument, sinon null (on cherchera dans le salon). */
+async function ciblePanneau(message, argument) {
+  const parReponse = message.reference?.messageId;
+  if (parReponse) return message.channel.messages.fetch(parReponse).catch(() => null);
+
+  const id = argument.match(/^\d{17,20}$/)?.[0];
+  if (id) return message.channel.messages.fetch(id).catch(() => null);
+
+  return null;
+}
+
+async function manageVersionPanneau(message, versV2) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const prefixe = versV2 ? V2_PREFIX : V1_PREFIX;
+  const argument = message.content.slice(prefixe.length).trim();
+
+  const annoncer = async (type, repostee) => {
+    const note = repostee ? " *(reposté : Discord ne sait pas retirer le format V2 d'un message existant)*" : '';
+    await message.channel.send(`${E_CHECK} ${PANNEAUX_VERSIONNES[type].label} repassé en **version ${versV2 ? '2' : '1'}**.${note}`);
+  };
+
+  // 1. Cible explicite : réponse au message, ou ID donné en argument.
+  const explicite = await ciblePanneau(message, argument);
+  if (explicite) {
+    const type = identifierPanneau(explicite);
+    if (!type) {
+      await message.channel.send("Ce message n'est pas un panneau convertible.");
+      return;
+    }
+    if (explicite.author.id !== client.user.id) {
+      await message.channel.send('Je ne peux modifier que mes propres messages.');
+      return;
+    }
+    const { repostee } = await basculerPanneau(explicite, type, versV2);
+    await annoncer(type, repostee);
+    return;
+  }
+
+  if (argument) {
+    await message.channel.send(`Message \`${argument}\` introuvable dans ce salon.`);
+    return;
+  }
+
+  // 2. Sinon on cherche dans le salon. 50 messages : au-delà, un panneau
+  //    est de toute façon plus simple à désigner en réponse ou par ID.
+  const recents = await message.channel.messages.fetch({ limit: 50 }).catch(() => null);
+  const trouves = [...(recents?.values() ?? [])]
+    .filter((m) => m.author.id === client.user.id)
+    .map((m) => ({ message: m, type: identifierPanneau(m) }))
+    .filter((x) => x.type);
+
+  if (trouves.length === 0) {
+    await message.channel.send(`Aucun panneau dans les 50 derniers messages. Réponds au panneau, ou donne son ID : \`${prefixe} <id>\`.`);
+    return;
+  }
+
+  if (trouves.length === 1) {
+    const { repostee } = await basculerPanneau(trouves[0].message, trouves[0].type, versV2);
+    await annoncer(trouves[0].type, repostee);
+    return;
+  }
+
+  // 3. Plusieurs panneaux : on demande lequel.
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('panneau_version_choix')
+    .setPlaceholder(`Quel panneau repasser en version ${versV2 ? '2' : '1'} ?`)
+    .addOptions(
+      trouves.slice(0, 25).map(({ message: m, type }) => ({
+        label: PANNEAUX_VERSIONNES[type].label.slice(0, 100),
+        description: `${estEnV2(m) ? 'V2' : 'V1'} — posté le ${new Date(m.createdTimestamp).toLocaleString('fr-FR')}`.slice(0, 100),
+        value: m.id,
+      }))
+    );
+
+  const embed = new EmbedBuilder()
+    .setColor(0x9b59b6)
+    .setTitle('Plusieurs panneaux dans ce salon')
+    .setDescription(`**${trouves.length}** panneaux trouvés. Choisis celui à convertir.`);
+  const demande = await message.channel.send({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+
+  try {
+    const choix = await demande.awaitMessageComponent({
+      componentType: ComponentType.StringSelect,
+      time: 60 * 1000,
+      filter: (i) => i.user.id === message.author.id,
+    });
+
+    const cible = trouves.find((x) => x.message.id === choix.values[0]);
+    if (!cible) {
+      await choix.update({ content: 'Panneau introuvable.', embeds: [], components: [] });
+      return;
+    }
+
+    const { repostee } = await basculerPanneau(cible.message, cible.type, versV2);
+    const note = repostee ? " *(reposté : Discord ne sait pas retirer le format V2 d'un message existant)*" : '';
+    await choix.update({
+      content: `${E_CHECK} ${PANNEAUX_VERSIONNES[cible.type].label} repassé en **version ${versV2 ? '2' : '1'}**.${note}`,
+      embeds: [],
+      components: [],
+    });
+  } catch {
+    await demande.edit({ components: [] }).catch(() => {});
+  }
 }
 
 /**

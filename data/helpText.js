@@ -73,6 +73,7 @@ function buildHelpText(isAdmin) {
     section('🎫', 'Tickets & photos', [
       '**=ticket** — Poste le panneau de tickets (archives dans #ticket-logs)',
       '**=ticket roles** — Choisit quels rôles voient et sont pingés par catégorie de ticket',
+      '**=v1** · **=v2** — Rebascule un panneau déjà posté entre les deux présentations (réponds au panneau, ou donne son ID)',
       '**=s&p** `[#salon]` — Réception de photos par MP',
     ]),
     section('🐕', 'Divers', [
