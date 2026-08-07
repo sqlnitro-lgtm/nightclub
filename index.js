@@ -1922,6 +1922,18 @@ function libellePanneau(type) {
   return PANNEAUX_VERSIONNES[type]?.label ?? 'Message';
 }
 
+// Un menu qui expire et vide `components: []` laisse un embed sans le
+// moindre indice qu'il n'est plus utilisable — indiscernable d'un bug.
+// On grise les boutons/menus à la place : l'embed reste lisible et dit
+// ce qui s'est passé.
+function desactiverComposants(message) {
+  return (message.components ?? []).map((row) => {
+    const rangee = ActionRowBuilder.from(row);
+    rangee.components.forEach((c) => c.setDisabled?.(true));
+    return rangee;
+  });
+}
+
 /** Ce message est-il déjà en Components V2 ? */
 function estEnV2(message) {
   return Boolean(message.flags?.has?.(MessageFlags.IsComponentsV2));
@@ -2075,7 +2087,7 @@ async function manageVersionPanneau(message, versV2) {
       components: [],
     });
   } catch {
-    await demande.edit({ components: [] }).catch(() => {});
+    await demande.edit({ components: desactiverComposants(demande) }).catch(() => {});
   }
 }
 
@@ -2178,7 +2190,7 @@ async function manageTicketRoles(message) {
   });
 
   collector.on('end', (_collected, reason) => {
-    if (reason !== 'done') panel.edit({ components: [] }).catch(() => {});
+    if (reason !== 'done') panel.edit({ components: desactiverComposants(panel) }).catch(() => {});
   });
 }
 
