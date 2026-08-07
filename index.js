@@ -55,6 +55,7 @@ const { addWarn, getWarns, removeWarn } = require('./data/warnStore');
 const { getLockAll, setLockAll, clearLockAll } = require('./data/lockAllStore');
 const { getLinkedGroups, toggleLinkedGroup } = require('./data/linkedRolesStore');
 const { getTicketRoles, setTicketRoles } = require('./data/ticketRolesStore');
+const embedVersion = require('./data/embedVersion');
 const {
   getChannelId: getSpChannelId,
   getAllActive: getSpActive,
@@ -789,7 +790,17 @@ async function enforceAutomod(message) {
   const banned = automod.findBannedWord(message.guild.id, message.content);
   if (!banned) return false;
 
-  await message.delete().catch(() => {});
+  try {
+    await message.delete();
+  } catch (err) {
+    // Erreur volontairement bruyante : sans elle, une permission "Gérer
+    // les messages" manquante laissait passer les messages sans la
+    // moindre trace, impossible à diagnostiquer — et le message
+    // d'avertissement s'affichait quand même juste après, comme si la
+    // suppression avait réussi.
+    console.error(`[automod] SUPPRESSION IMPOSSIBLE dans #${message.channel.name} sur ${message.guild.name} (permission "Gérer les messages" manquante ?) :`, err.message);
+    return false;
+  }
 
   const warning = await message.channel
     .send(`<:egirl:1526275509464469615> <@${message.author.id}>, ce mot est interdit ici.`)
@@ -1033,6 +1044,15 @@ async function handleWl(message, rawTarget) {
 /** &lock / &unlock : verrouille/déverrouille le salon où la commande est tapée. */
 async function handleLock(message, lock) {
   if (!(await requireAdminMessage(message))) return;
+
+  // Vérifié AVANT d'essayer : sans ça, l'échec tombait dans le catch avec
+  // le message d'erreur brut de Discord au lieu d'expliquer clairement
+  // ce qui manque.
+  const moi = message.guild.members.me;
+  if (!message.channel.permissionsFor(moi)?.has(PermissionFlagsBits.ManageRoles)) {
+    await message.channel.send("Je n'ai pas le droit de modifier les permissions de ce salon (permission \"Gérer les rôles\" manquante).");
+    return;
+  }
 
   try {
     await message.channel.permissionOverwrites.edit(message.guild.id, { SendMessages: lock ? false : null });
@@ -1881,12 +1901,25 @@ function identifierPanneau(message) {
       if (composant.accessory?.customId) customIds.push(composant.accessory.customId);
     }
   }
-  if (customIds.length === 0) return null;
 
+  // Panneau connu : un constructeur dédié existe, il rend mieux parce
+  // qu'il sait ce que chaque ligne signifie.
   for (const [type, panneau] of Object.entries(PANNEAUX_VERSIONNES)) {
     if (customIds.some((id) => id.startsWith(panneau.prefixe))) return type;
   }
-  return null;
+
+  // Sinon, TOUT message du bot se convertit quand même : data/embedVersion.js
+  // en traduit la structure, faute d'en comprendre le contenu. Simple
+  // texte, embed(s), boutons, ou déjà en V2 — rien à enregistrer au
+  // préalable. Seul un message vraiment vide n'a rien à convertir.
+  const aQuelqueChose =
+    Boolean(message.content) || (message.embeds?.length ?? 0) > 0 || (message.components?.length ?? 0) > 0 || estEnV2(message);
+  return aQuelqueChose ? 'generique' : null;
+}
+
+/** Nom lisible d'un panneau, y compris pour les messages sans type connu. */
+function libellePanneau(type) {
+  return PANNEAUX_VERSIONNES[type]?.label ?? 'Message';
 }
 
 /** Ce message est-il déjà en Components V2 ? */
@@ -1909,7 +1942,7 @@ function estEnV2(message) {
  * @returns {Promise<{repostee: boolean}>}
  */
 async function basculerPanneau(message, type, versV2) {
-  const payload = PANNEAUX_VERSIONNES[type].build(versV2);
+  const payload = type === 'generique' ? (versV2 ? embedVersion.versV2(message) : embedVersion.versV1(message)) : PANNEAUX_VERSIONNES[type].build(versV2);
 
   if (versV2) {
     await message.edit({ content: '', embeds: [], ...payload });
@@ -1945,7 +1978,7 @@ async function manageVersionPanneau(message, versV2) {
 
   const annoncer = async (type, repostee) => {
     const note = repostee ? " *(reposté : Discord ne sait pas retirer le format V2 d'un message existant)*" : '';
-    await message.channel.send(`${E_CHECK} ${PANNEAUX_VERSIONNES[type].label} repassé en **version ${versV2 ? '2' : '1'}**.${note}`);
+    await message.channel.send(`${E_CHECK} ${libellePanneau(type)} repassé en **version ${versV2 ? '2' : '1'}**.${note}`);
   };
 
   // 1. Cible explicite : réponse au message, ou ID donné en argument.
@@ -1960,8 +1993,12 @@ async function manageVersionPanneau(message, versV2) {
       await message.channel.send('Je ne peux modifier que mes propres messages.');
       return;
     }
-    const { repostee } = await basculerPanneau(explicite, type, versV2);
-    await annoncer(type, repostee);
+    try {
+      const { repostee } = await basculerPanneau(explicite, type, versV2);
+      await annoncer(type, repostee);
+    } catch (err) {
+      await message.channel.send(`Conversion impossible : ${err.message}.`);
+    }
     return;
   }
 
@@ -1984,8 +2021,12 @@ async function manageVersionPanneau(message, versV2) {
   }
 
   if (trouves.length === 1) {
-    const { repostee } = await basculerPanneau(trouves[0].message, trouves[0].type, versV2);
-    await annoncer(trouves[0].type, repostee);
+    try {
+      const { repostee } = await basculerPanneau(trouves[0].message, trouves[0].type, versV2);
+      await annoncer(trouves[0].type, repostee);
+    } catch (err) {
+      await message.channel.send(`Conversion impossible : ${err.message}.`);
+    }
     return;
   }
 
@@ -1995,7 +2036,7 @@ async function manageVersionPanneau(message, versV2) {
     .setPlaceholder(`Quel panneau repasser en version ${versV2 ? '2' : '1'} ?`)
     .addOptions(
       trouves.slice(0, 25).map(({ message: m, type }) => ({
-        label: PANNEAUX_VERSIONNES[type].label.slice(0, 100),
+        label: libellePanneau(type).slice(0, 100),
         description: `${estEnV2(m) ? 'V2' : 'V1'} — posté le ${new Date(m.createdTimestamp).toLocaleString('fr-FR')}`.slice(0, 100),
         value: m.id,
       }))
@@ -2020,10 +2061,16 @@ async function manageVersionPanneau(message, versV2) {
       return;
     }
 
-    const { repostee } = await basculerPanneau(cible.message, cible.type, versV2);
+    let repostee;
+    try {
+      ({ repostee } = await basculerPanneau(cible.message, cible.type, versV2));
+    } catch (err) {
+      await choix.update({ content: `Conversion impossible : ${err.message}.`, embeds: [], components: [] });
+      return;
+    }
     const note = repostee ? " *(reposté : Discord ne sait pas retirer le format V2 d'un message existant)*" : '';
     await choix.update({
-      content: `${E_CHECK} ${PANNEAUX_VERSIONNES[cible.type].label} repassé en **version ${versV2 ? '2' : '1'}**.${note}`,
+      content: `${E_CHECK} ${libellePanneau(cible.type)} repassé en **version ${versV2 ? '2' : '1'}**.${note}`,
       embeds: [],
       components: [],
     });
