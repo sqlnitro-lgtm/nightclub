@@ -29,6 +29,7 @@ function buildHelpText(isAdmin) {
     section('👑', 'Administration', [
       '**=admin** `<id>` — Donne/retire le rôle Admin',
       '**=admin** — Liste les admins',
+      '**=bot** — Qui a accès au bot (propriétaires + admins)',
     ]),
     section('🎭', 'Rôles', [
       '**/role** · **/delrole** — Ajoute/retire un rôle',

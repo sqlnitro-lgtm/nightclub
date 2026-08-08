@@ -74,6 +74,7 @@ const PV_PREFIX = '=pv';
 const FIND_PREFIX = '=find';
 const ADDMIN_PREFIX = '=addmin';
 const ADMIN_PREFIX = '=admin';
+const BOT_ACCESS_PREFIX = '=bot';
 const FOLLOW_PREFIX = '=follow';
 const WARN_PREFIX = '&warn';
 const UNWARN_PREFIX = '&unwarn';
@@ -691,6 +692,9 @@ client.on('messageCreate', async (message) => {
     case ADMIN_PREFIX:
       // =admin et =addmin sont interchangeables : id -> ajoute, sans id -> liste.
       await handleAddmin(message, restArgs).catch((err) => console.error('[addmin] Erreur :', err.message));
+      return;
+    case BOT_ACCESS_PREFIX:
+      await handleBotAccess(message).catch((err) => console.error('[bot] Erreur :', err.message));
       return;
     case FOLLOW_PREFIX:
       await handleFollow(message, restArgs).catch((err) => console.error('[follow] Erreur :', err.message));
@@ -2529,6 +2533,40 @@ async function handleAdminList(message) {
     .setColor(0x9b59b6)
     .setTitle(`👑 Admins du serveur (${members.length})`)
     .setDescription(lines.join('\n'));
+  await message.channel.send({ embeds: [embed] });
+}
+
+/**
+ * =bot : vue d'ensemble en lecture seule de qui a accès aux commandes du
+ * bot — les propriétaires (contournent tout, partout) et les admins de CE
+ * serveur (rôle Admin, voir =admin). Repris du =bot d'Airline, mais sans
+ * ses paliers de whitelist économiques : PV n'a que ces deux niveaux.
+ */
+async function handleBotAccess(message) {
+  if (!(await requireAdminMessage(message))) return;
+
+  const owners = await Promise.all(
+    OWNER_IDS.map(async (id) => {
+      const user = await client.users.fetch(id).catch(() => null);
+      return `${user ? user.tag : 'Inconnu'} — \`${id}\``;
+    })
+  );
+
+  const role = message.guild.roles.cache.find((r) => r.name === ADMIN_ROLE_NAME);
+  await message.guild.members.fetch().catch(() => {});
+  const admins = role ? [...role.members.values()].map((m) => `<@${m.id}> — \`${m.id}\``) : [];
+
+  const embed = new EmbedBuilder()
+    .setColor(0x9b59b6)
+    .setTitle('🔑 Accès au bot')
+    .setDescription('Qui a accès aux commandes du bot. Les propriétaires contournent tout, partout ; les admins seulement sur ce serveur.')
+    .addFields(
+      { name: `👑 Propriétaires du bot (${owners.length})`, value: owners.join('\n') || '*Aucun.*' },
+      {
+        name: `🛡️ Admins de ce serveur (${admins.length})`,
+        value: admins.length ? admins.join('\n') : `Aucun — donne le rôle avec \`${ADMIN_PREFIX} <id>\`.`,
+      }
+    );
   await message.channel.send({ embeds: [embed] });
 }
 
